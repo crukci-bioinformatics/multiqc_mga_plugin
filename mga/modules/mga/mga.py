@@ -52,7 +52,6 @@ class MultiqcModule(BaseMultiqcModule):
         
         self.mga_data = dict()
         for mgafile in self.find_log_files('mga', filecontents=False, filehandles=True):
-            log.debug("Found file {}/{}".format(mgafile["root"], mgafile["fn"]))
             self.read_mga_xml_file(mgafile)
 
         if len(self.mga_data) == 0:
@@ -67,12 +66,15 @@ class MultiqcModule(BaseMultiqcModule):
     def read_mga_xml_file(self, mgafile):
         #content = untangle.parse(mgafile["f"])
         content = objectify.parse(mgafile["f"])
-        if content is None:
+        if content is None or content.getroot() is None:
             log.warn("Failed to parse {}".format(mgafile['fn']))
-            
-        runId = content.findtext("RunID")
-        if runId not in self.mga_data:
-            self.mga_data[runId] = content
+        elif content.getroot().tag != 'MultiGenomeAlignmentSummaries':
+            log.debug("{}/{} is not an MGA summary file.".format(mgafile['root'], mgafile['fn']))
+        else:
+            log.debug("Found file {}/{}".format(mgafile["root"], mgafile["fn"]))
+            runId = content.findtext("RunID")
+            if runId not in self.mga_data:
+                self.mga_data[runId] = content
 
     def get_bar_data_from_summary(self, summary):
         sequence_count = int(summary.findtext("SequenceCount"))
@@ -91,8 +93,8 @@ class MultiqcModule(BaseMultiqcModule):
                 if sample['control']:
                     controls.add(sp)
         
-        log.info("Species: {}".format(species))
-        log.info("Controls: {}".format(controls))
+        log.debug("Species: {}".format(species))
+        log.debug("Controls: {}".format(controls))
         
         bar_data = dict()
         
@@ -117,7 +119,7 @@ class MultiqcModule(BaseMultiqcModule):
             alpha = max(min_alpha, min(max_alpha, alpha))
             
             if assigned_count >= 100:
-                log.info("{}\t{}\t{}\t{}".format(reference_genome_id, assigned_count, error_rate * 100.0, alpha))
+                log.debug("{}\t{}\t{}\t{}".format(reference_genome_id, assigned_count, error_rate * 100.0, alpha))
             
             if assigned_count > 0:
                 bar_data[reference_genome_id] = {
@@ -126,17 +128,17 @@ class MultiqcModule(BaseMultiqcModule):
                     'colour': colour
                 }
             
-        # TODO: sort into order of assigned count.
+        # Sort into decreasing order of assigned count.
         bar_data = OrderedDict(sorted(bar_data.items(), key = lambda x: -x[1]['count']))
                 
-        log.info("Adapter count: {} / {}".format(adapter_count, sampled_count))
+        log.debug("Adapter count: {} / {}".format(adapter_count, sampled_count))
         
         bar_data['adapter'] = {
             'count': adapter_count,
             'colour': bar_colours.adapter
         }
         
-        log.info("Bar data =\n{}".format(bar_data))
+        log.info("Bar data = {}".format(bar_data))
 
         return bar_data
 
