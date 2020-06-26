@@ -33,6 +33,10 @@ min_alpha = 0.1
 max_error = 0.0025
 min_error = 0.01
 
+assigned_fraction_threshold = 0.01
+aligned_fraction_threshold = 0.01
+error_rate_threshold = 0.0125
+
 # Based on https://github.com/MultiQC/example-plugin
 
 class MultiqcModule(BaseMultiqcModule):
@@ -81,6 +85,12 @@ class MultiqcModule(BaseMultiqcModule):
                 ''',
                 plot = bargraph_plot_html
             )
+
+            for summary in dataset.findall("MultiGenomeAlignmentSummary"):
+                self.add_section(
+                    description = "Statistics for dataset {}".format(summary.findtext("DatasetId")),
+                    plot = self.get_table_data(summary)
+                )
 
 
     def read_mga_xml_file(self, mgafile):
@@ -182,6 +192,161 @@ class MultiqcModule(BaseMultiqcModule):
 
         return bar_data, categories
 
+    
+    def get_table_data(self, summary):
+        headers = OrderedDict()
+        '''
+        headers['reference_id'] = {
+            'title': 'Reference ID',
+            'description': 'Internal reference genome identifier',
+            'scale': False
+        }
+        '''
+        headers['species'] = {
+            'title': 'Species/Reference Genome',
+            'description': 'Reference genome species',
+            'scale': False
+        }
+        headers['aligned_count'] = {
+            'title': 'Aligned',
+            'description': 'Number of reads aligned',
+            'min': 0,
+            'format': '{:d}',
+            'scale': False
+        }
+        headers['aligned_perc'] = {
+            'title': 'Aligned %',
+            'description': 'Percentage of reads aligned',
+            'suffix': '%',
+            'min': 0,
+            'max': 100,
+            'format': '{:,.1f}',
+            'scale': False
+        }
+        headers['aligned_error'] = {
+            'title': 'Error rate',
+            'description': 'Aligned error rate',
+            'suffix': '%',
+            'min': 0,
+            'max': 100,
+            'format': '{:,.2f}',
+            'scale': False
+        }
+        headers['unique_count'] = {
+            'title': 'Unique',
+            'description': 'Number of uniquely aligned reads',
+            'min': 0,
+            'format': '{:d}',
+            'scale': False
+        }
+        headers['unique_error'] = {
+            'title': 'Error rate',
+            'description': 'Uniquely aligned error rate',
+            'suffix': '%',
+            'min': 0,
+            'max': 100,
+            'format': '{:,.2f}',
+            'scale': False
+        }
+        headers['preferred_count'] = {
+            'title': 'Best',
+            'description': 'Number of reads for which the genome is the best alignment',
+            'min': 0,
+            'format': '{:d}',
+            'scale': False
+        }
+        headers['preferred_error'] = {
+            'title': 'Error rate',
+            'description': 'Error rate for best aligned reads',
+            'suffix': '%',
+            'min': 0,
+            'max': 100,
+            'format': '{:,.2f}',
+            'scale': False
+        }
+        headers['assigned_count'] = {
+            'title': 'Assigned',
+            'description': 'Number of reads assigned',
+            'min': 0,
+            'format': '{:d}',
+            'scale': False
+        }
+        headers['assigned_perc'] = {
+            'title': 'Assigned %',
+            'description': 'Percentage of reads assigned',
+            'suffix': '%',
+            'min': 0,
+            'max': 100,
+            'format': '{:,.1f}',
+            'scale': False
+        }
+        headers['assigned_error'] = {
+            'title': 'Error rate',
+            'description': 'Assigned error rate',
+            'suffix': '%',
+            'min': 0,
+            'max': 100,
+            'format': '{:,.2f}',
+            'scale': False
+        }
+
+        dataset_id = summary.findtext('DatasetId')
+
+        table_config = {
+            'namespace': 'mga',
+            'id': 'mga_stats_table.{}'.format(dataset_id),
+            'table_title': dataset_id,
+            'col1_header': 'Reference ID',
+            'no_beeswarm': True
+        }
+        
+        table_data = dict()
+        
+        sequence_count = int(summary.findtext('SequenceCount'))
+        sampled_count = int(summary.findtext('SampledCount'))
+        adapter_count = int(summary.findtext('AdapterCount'))
+        unmapped_count = int(summary.findtext('UnmappedCount'))
+        
+        for alignmentSummary in summary.findall("AlignmentSummaries/AlignmentSummary"):
+            aligned_count = int(alignmentSummary.findtext("AlignedCount"))
+            aligned_error = float(alignmentSummary.findtext("ErrorRate"))
+            unique_count = int(alignmentSummary.findtext("UniquelyAlignedCount"))
+            unique_error = float(alignmentSummary.findtext("UniquelyAlignedErrorRate"))
+            preferred_count = int(alignmentSummary.findtext("PreferentiallyAlignedCount"))
+            preferred_error = float(alignmentSummary.findtext("PreferentiallyAlignedErrorRate"))
+            assigned_count = int(alignmentSummary.findtext("AssignedCount"))
+            assigned_error = float(alignmentSummary.findtext("AssignedErrorRate"))
+            
+            reference_genome_id = alignmentSummary.find("ReferenceGenome").attrib['id']
+            reference_genome_name = alignmentSummary.find("ReferenceGenome").attrib['name']
+        
+            aligned_fraction = float(aligned_count) / float(sampled_count)
+            assigned_fraction = float(assigned_count) / float(sampled_count)
+            
+            # TODO. Got to here. More filters in results.xsl.
+            
+            if aligned_fraction >= aligned_fraction_threshold and assigned_fraction >= assigned_fraction_threshold:
+                table_data[reference_genome_id] = {
+                    'species': reference_genome_name,
+                    'aligned_count': aligned_count,
+                    'aligned_perc': aligned_fraction * 100.0,
+                    'aligned_error': aligned_error * 100.0,
+                    'unique_count': unique_count,
+                    'unique_error': unique_error * 100.0,
+                    'preferred_count': preferred_count,
+                    'preferred_error': preferred_error * 100.0,
+                    'assigned_count': assigned_count,
+                    'assigned_perc': assigned_fraction * 100.0,
+                    'assigned_error': assigned_error * 100.0
+                }
+        
+        # Sort into decreasing order of assigned count.
+        table_data = OrderedDict(sorted(table_data.items(), key = lambda x: -x[1]['assigned_count']))
+        
+        # TODO : Add others, controls, adapter
+        
+        return table.plot(table_data, headers, table_config)
+        
 
     def get_sample_information(self, summary):
         samples = []
