@@ -360,6 +360,10 @@ class MultiqcModule(BaseMultiqcModule):
     
     def read_properties(self, element, props = dict()):
         for prop in element.findall("Properties/Property"):
-            props[prop.attrib['name'].replace(' ', '').lower()] = prop.attrib['value']
+            try:
+                props[prop.attrib['name'].replace(' ', '').lower()] = prop.attrib['value']
+            except KeyError:
+                # Leave put any that have no value.
+                pass
         return props
 
