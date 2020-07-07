@@ -157,15 +157,13 @@ class MultiqcModule(BaseMultiqcModule):
                 alpha = max_alpha - (max_alpha - min_alpha) * (assigned_error_rate - min_error) / (max_error - min_error)
                 alpha = max(min_alpha, min(max_alpha, alpha))
                 
-                # colour = colour.applyAlpha(alpha)
-                
                 if assigned_count >= 100:
                     log.debug("{}\t{}\t{}\t{}".format(reference_genome_id, assigned_count, error_rate * 100.0, alpha))
                     dataset_bar_data[category_id] = assigned_count
                 
                     dataset_categories[category_id] = {
                         'name': reference_genome_name,
-                        'color': colour.toHtml()
+                        'color': colour.applyAlpha(alpha).toHtml()
                     }
                 
             # Sort into decreasing order of assigned count.

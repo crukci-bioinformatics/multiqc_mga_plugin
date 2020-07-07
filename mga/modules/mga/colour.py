@@ -2,13 +2,11 @@
 
 """ MultiQC Multi Genome Alignment module """
 
-import colorsys
-
 class Colour(object):
     
     @staticmethod
     def fromBytes(r, g, b):
-        return Colour(r / 255.0, g / 255.0, b / 255.0)
+        return Colour(r, g, b)
     
     def __init__(self, r, g, b):
         self.red = r
@@ -16,9 +14,14 @@ class Colour(object):
         self.blue = b
         
     def applyAlpha(self, alpha):
-        h, l, s = colorsys.rgb_to_hls(self.red, self.green, self.blue)
-        rgb = colorsys.hls_to_rgb(h, l, s * alpha)
-        return Colour(rgb[0], rgb[1], rgb[2])
+        return Colour(self._alphaValue(self.red, alpha),
+                      self._alphaValue(self.green, alpha),
+                      self._alphaValue(self.blue, alpha))
     
     def toHtml(self):
-        return "#{:02x}{:02x}{:02x}".format(int(self.red * 255), int(self.green * 255), int(self.blue * 255))
+        return "#{:02x}{:02x}{:02x}".format(self.red, self.green, self.blue)
+    
+    def _alphaValue(self, c, a):
+        # 255 because we're always considering a white background.
+        bgc = 255
+        return int(a * c + (1.0 - a) * bgc)
