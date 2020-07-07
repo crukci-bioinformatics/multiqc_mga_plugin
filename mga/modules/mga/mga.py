@@ -114,16 +114,7 @@ class MultiqcModule(BaseMultiqcModule):
             
             max_sampled_count = max(max_sampled_count, sampled_count)
 
-            samples = self.get_sample_information(summary)
-            
-            species = set()
-            controls = set()
-            for sample in samples:
-                if 'species' in sample:
-                    sp = sample['species']
-                    species.add(sp)
-                    if sample['control']:
-                        controls.add(sp)
+            species, controls = self._get_species_and_controls(summary)
             
             log.debug("Dataset {} Species: {}".format(dataset_id, species))
             log.debug("Dataset {} Controls: {}".format(dataset_id, controls))
@@ -133,17 +124,17 @@ class MultiqcModule(BaseMultiqcModule):
             
             for alignmentSummary in summary.findall("AlignmentSummaries/AlignmentSummary"):
                 aligned_count = int(alignmentSummary.findtext("AlignedCount"))
+                aligned_error = float(alignmentSummary.findtext("ErrorRate"))
                 assigned_count = int(alignmentSummary.findtext("AssignedCount"))
+                assigned_error = float(alignmentSummary.findtext("AssignedErrorRate"))
                 
                 aligned_fraction = float(aligned_count) / float(sampled_count)
                 assigned_fraction = float(assigned_count) / float(sampled_count)
 
-                if aligned_fraction >= aligned_fraction_threshold and assigned_fraction >= assigned_fraction_threshold:
-                    assigned_error_rate = float(alignmentSummary.findtext("AssignedErrorRate"))
-                    error_rate = float(alignmentSummary.findtext("ErrorRate"))
-                    
-                    reference_genome_id = alignmentSummary.find("ReferenceGenome").attrib['id']
-                    reference_genome_name = alignmentSummary.find("ReferenceGenome").attrib['name']
+                reference_genome_id = alignmentSummary.find("ReferenceGenome").attrib['id']
+                reference_genome_name = alignmentSummary.find("ReferenceGenome").attrib['name']
+
+                if reference_genome_name in species or self._accept_genome(assigned_fraction, aligned_fraction, aligned_error):
                     
                     category_id = "{}.{}".format(dataset_id, reference_genome_id)
                     
@@ -155,12 +146,12 @@ class MultiqcModule(BaseMultiqcModule):
                     elif len(species) == 0 or 'other' in map(lambda s: s.lower(), species):
                         colour = bar_colours.grey
                     
-                    alpha = max_alpha - (max_alpha - min_alpha) * (assigned_error_rate - min_error) / (max_error - min_error)
+                    alpha = max_alpha - (max_alpha - min_alpha) * (assigned_error - min_error) / (max_error - min_error)
                     alpha = 1.0 - max(min_alpha, min(max_alpha, alpha))
                     
                     if assigned_count >= 100:
-                        log.debug("{}\t{}\t{}\t{}".format(reference_genome_id, assigned_count, error_rate * 100.0, alpha))
-
+                        log.debug("{}\t{}\t{}\t{}".format(reference_genome_id, assigned_count, aligned_error * 100.0, alpha))
+    
                     dataset_bar_data[category_id] = assigned_count
                 
                     dataset_categories[category_id] = {
@@ -204,7 +195,6 @@ class MultiqcModule(BaseMultiqcModule):
         
         return bar_data, categories, plot_config
 
-    
     def get_table_data(self, summary):
         headers = OrderedDict()
         '''
@@ -311,6 +301,8 @@ class MultiqcModule(BaseMultiqcModule):
         adapter_count = int(summary.findtext('AdapterCount'))
         unmapped_count = int(summary.findtext('UnmappedCount'))
 
+        species, controls = self._get_species_and_controls(summary)
+            
         number_of_others = 0
         other_assigned_count = 0
         
@@ -319,10 +311,12 @@ class MultiqcModule(BaseMultiqcModule):
             aligned_error = float(alignmentSummary.findtext("ErrorRate"))
             assigned_count = int(alignmentSummary.findtext("AssignedCount"))
             
+            reference_genome_name = alignmentSummary.find("ReferenceGenome").attrib['name']
+
             aligned_fraction = float(aligned_count) / float(sampled_count)
             assigned_fraction = float(assigned_count) / float(sampled_count)
             
-            if not self._accept_genome(assigned_fraction, aligned_fraction, aligned_error):
+            if not(reference_genome_name in species or self._accept_genome(assigned_fraction, aligned_fraction, aligned_error)):
                 number_of_others = number_of_others + 1
                 other_assigned_count = other_assigned_count + assigned_count
         
@@ -342,7 +336,7 @@ class MultiqcModule(BaseMultiqcModule):
             aligned_fraction = float(aligned_count) / float(sampled_count)
             assigned_fraction = float(assigned_count) / float(sampled_count)
             
-            if number_of_others < 2 or self._accept_genome(assigned_fraction, aligned_fraction, aligned_error):
+            if number_of_others < 2 or reference_genome_name in species or self._accept_genome(assigned_fraction, aligned_fraction, aligned_error):
                 table_data[reference_genome_id] = {
                     'species': reference_genome_name,
                     'aligned_count': aligned_count,
@@ -389,6 +383,22 @@ class MultiqcModule(BaseMultiqcModule):
         }
         
         return table.plot(table_data, headers, table_config)
+    
+
+    def _get_species_and_controls(self, summary):
+        samples = self.get_sample_information(summary)
+        
+        species = set()
+        controls = set()
+        for sample in samples:
+            if 'species' in sample:
+                sp = sample['species']
+                species.add(sp)
+                if sample['control']:
+                    controls.add(sp)
+                    
+        return species, controls
+
     
     def _accept_genome(self, assigned_fraction, aligned_fraction, aligned_error_rate):
         return assigned_fraction >= assigned_fraction_threshold or aligned_fraction >= aligned_fraction_threshold and aligned_error_rate < error_rate_threshold
