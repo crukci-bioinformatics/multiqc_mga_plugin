@@ -122,20 +122,16 @@ class MultiqcModule(BaseMultiqcModule):
             dataset_bar_data = dict()
             dataset_categories = dict()
             
-            for alignmentSummary in summary.findall("AlignmentSummaries/AlignmentSummary"):
-                aligned_count = int(alignmentSummary.findtext("AlignedCount"))
-                aligned_error = float(alignmentSummary.findtext("ErrorRate"))
-                assigned_count = int(alignmentSummary.findtext("AssignedCount"))
-                assigned_error = float(alignmentSummary.findtext("AssignedErrorRate"))
-                
-                aligned_fraction = float(aligned_count) / float(sampled_count)
-                assigned_fraction = float(assigned_count) / float(sampled_count)
-
-                reference_genome_id = alignmentSummary.find("ReferenceGenome").attrib['id']
-                reference_genome_name = alignmentSummary.find("ReferenceGenome").attrib['name']
-
-                if reference_genome_name in species or self._accept_genome(assigned_fraction, aligned_fraction, aligned_error):
+            for alignment_summary in summary.findall("AlignmentSummaries/AlignmentSummary"):
+                if self._accept_genome(species, summary, alignment_summary):
+                    aligned_count = int(alignment_summary.findtext("AlignedCount"))
+                    aligned_error = float(alignment_summary.findtext("ErrorRate"))
+                    assigned_count = int(alignment_summary.findtext("AssignedCount"))
+                    assigned_error = float(alignment_summary.findtext("AssignedErrorRate"))
                     
+                    reference_genome_id = alignment_summary.find("ReferenceGenome").attrib['id']
+                    reference_genome_name = alignment_summary.find("ReferenceGenome").attrib['name']
+    
                     category_id = "{}.{}".format(dataset_id, reference_genome_id)
                     
                     colour = bar_colours.red
@@ -306,37 +302,29 @@ class MultiqcModule(BaseMultiqcModule):
         number_of_others = 0
         other_assigned_count = 0
         
-        for alignmentSummary in summary.findall("AlignmentSummaries/AlignmentSummary"):
-            aligned_count = int(alignmentSummary.findtext("AlignedCount"))
-            aligned_error = float(alignmentSummary.findtext("ErrorRate"))
-            assigned_count = int(alignmentSummary.findtext("AssignedCount"))
-            
-            reference_genome_name = alignmentSummary.find("ReferenceGenome").attrib['name']
-
-            aligned_fraction = float(aligned_count) / float(sampled_count)
-            assigned_fraction = float(assigned_count) / float(sampled_count)
-            
-            if not(reference_genome_name in species or self._accept_genome(assigned_fraction, aligned_fraction, aligned_error)):
+        for alignment_summary in summary.findall("AlignmentSummaries/AlignmentSummary"):
+            if not self._accept_genome(species, summary, alignment_summary):
+                assigned_count = int(alignment_summary.findtext("AssignedCount"))
                 number_of_others = number_of_others + 1
                 other_assigned_count = other_assigned_count + assigned_count
         
-        for alignmentSummary in summary.findall("AlignmentSummaries/AlignmentSummary"):
-            aligned_count = int(alignmentSummary.findtext("AlignedCount"))
-            aligned_error = float(alignmentSummary.findtext("ErrorRate"))
-            unique_count = int(alignmentSummary.findtext("UniquelyAlignedCount"))
-            unique_error = float(alignmentSummary.findtext("UniquelyAlignedErrorRate"))
-            preferred_count = int(alignmentSummary.findtext("PreferentiallyAlignedCount"))
-            preferred_error = float(alignmentSummary.findtext("PreferentiallyAlignedErrorRate"))
-            assigned_count = int(alignmentSummary.findtext("AssignedCount"))
-            assigned_error = float(alignmentSummary.findtext("AssignedErrorRate"))
+        for alignment_summary in summary.findall("AlignmentSummaries/AlignmentSummary"):
+            if number_of_others < 2 or self._accept_genome(species, summary, alignment_summary):
+                aligned_count = int(alignment_summary.findtext("AlignedCount"))
+                aligned_error = float(alignment_summary.findtext("ErrorRate"))
+                unique_count = int(alignment_summary.findtext("UniquelyAlignedCount"))
+                unique_error = float(alignment_summary.findtext("UniquelyAlignedErrorRate"))
+                preferred_count = int(alignment_summary.findtext("PreferentiallyAlignedCount"))
+                preferred_error = float(alignment_summary.findtext("PreferentiallyAlignedErrorRate"))
+                assigned_count = int(alignment_summary.findtext("AssignedCount"))
+                assigned_error = float(alignment_summary.findtext("AssignedErrorRate"))
+                
+                reference_genome_id = alignment_summary.find("ReferenceGenome").attrib['id']
+                reference_genome_name = alignment_summary.find("ReferenceGenome").attrib['name']
             
-            reference_genome_id = alignmentSummary.find("ReferenceGenome").attrib['id']
-            reference_genome_name = alignmentSummary.find("ReferenceGenome").attrib['name']
-        
-            aligned_fraction = float(aligned_count) / float(sampled_count)
-            assigned_fraction = float(assigned_count) / float(sampled_count)
-            
-            if number_of_others < 2 or reference_genome_name in species or self._accept_genome(assigned_fraction, aligned_fraction, aligned_error):
+                aligned_fraction = float(aligned_count) / float(sampled_count)
+                assigned_fraction = float(assigned_count) / float(sampled_count)
+                
                 table_data[reference_genome_id] = {
                     'species': reference_genome_name,
                     'aligned_count': aligned_count,
@@ -400,7 +388,21 @@ class MultiqcModule(BaseMultiqcModule):
         return species, controls
 
     
-    def _accept_genome(self, assigned_fraction, aligned_fraction, aligned_error_rate):
+    def _accept_genome(self, species_set, summary, alignment_summary):
+        reference_genome_name = alignment_summary.find("ReferenceGenome").attrib['name']
+
+        if reference_genome_name in species_set:
+            return True
+
+        sampled_count = int(summary.findtext("SampledCount"))
+        
+        aligned_count = int(alignment_summary.findtext("AlignedCount"))
+        aligned_error_rate = float(alignment_summary.findtext("ErrorRate"))
+        assigned_count = int(alignment_summary.findtext("AssignedCount"))
+        
+        aligned_fraction = float(aligned_count) / float(sampled_count)
+        assigned_fraction = float(assigned_count) / float(sampled_count)
+
         return assigned_fraction >= assigned_fraction_threshold or aligned_fraction >= aligned_fraction_threshold and aligned_error_rate < error_rate_threshold
 
 
