@@ -22,6 +22,7 @@ class Colour(object):
         return "#{:02x}{:02x}{:02x}".format(self.red, self.green, self.blue)
     
     def _alphaValue(self, c, a):
+        # See https://stackoverflow.com/a/746937
         # 255 because we're always considering a white background.
         bgc = 255
         return int(a * c + (1.0 - a) * bgc)

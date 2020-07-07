@@ -29,7 +29,7 @@ bar_colours = SimpleNamespace(**{
 })
 
 max_alpha = 1.0
-min_alpha = 0.1
+min_alpha = 0.25
 max_error = 0.0025
 min_error = 0.01
 
@@ -66,16 +66,8 @@ class MultiqcModule(BaseMultiqcModule):
         log.info("Found {} reports".format(len(self.mga_data)))
         
         for run_id, dataset in self.mga_data.items():
-            bar_data, bar_categories = self.get_bar_data(dataset)
+            bar_data, bar_categories, plot_config = self.get_bar_data(dataset)
 
-            plot_config = {
-                'id': "mga_plot_{}".format(run_id),
-                'title': "Multi Genome Alignment: {}".format(run_id),
-                'xlab': "Lanes",
-                'ylab': "Reads",
-                'use_legend': False
-            }
-            
             bargraph_plot_html = bargraph.plot(bar_data, bar_categories, plot_config)
             
             self.add_section(
@@ -101,15 +93,17 @@ class MultiqcModule(BaseMultiqcModule):
             log.debug("{}/{} is not an MGA summary file.".format(mgafile['root'], mgafile['fn']))
         else:
             log.debug("Found file {}/{}".format(mgafile["root"], mgafile["fn"]))
-            runId = content.findtext("RunID")
-            if runId not in self.mga_data:
-                self.mga_data[runId] = content
+            run_id = content.findtext("RunID")
+            if run_id not in self.mga_data:
+                self.mga_data[run_id] = content
 
 
     def get_bar_data(self, mga_data):
         
+        run_id = mga_data.findtext("RunID")
         bar_data = OrderedDict()
         categories = OrderedDict()
+        max_sampled_count = 0
         
         for summary in mga_data.findall("/MultiGenomeAlignmentSummary"):
             dataset_id = summary.findtext("DatasetId")
@@ -118,6 +112,8 @@ class MultiqcModule(BaseMultiqcModule):
             adapter_count = int(summary.findtext("AdapterCount"))
             unmapped_count = int(summary.findtext("UnmappedCount"))
             
+            max_sampled_count = max(max_sampled_count, sampled_count)
+
             samples = self.get_sample_information(summary)
             
             species = set()
@@ -129,36 +125,42 @@ class MultiqcModule(BaseMultiqcModule):
                     if sample['control']:
                         controls.add(sp)
             
-            log.info("Dataset {} Species: {}".format(dataset_id, species))
-            log.info("Dataset {} Controls: {}".format(dataset_id, controls))
+            log.debug("Dataset {} Species: {}".format(dataset_id, species))
+            log.debug("Dataset {} Controls: {}".format(dataset_id, controls))
             
             dataset_bar_data = dict()
             dataset_categories = dict()
             
             for alignmentSummary in summary.findall("AlignmentSummaries/AlignmentSummary"):
+                aligned_count = int(alignmentSummary.findtext("AlignedCount"))
                 assigned_count = int(alignmentSummary.findtext("AssignedCount"))
                 
-                assigned_error_rate = float(alignmentSummary.findtext("AssignedErrorRate"))
-                error_rate = float(alignmentSummary.findtext("ErrorRate"))
-                
-                reference_genome_id = alignmentSummary.find("ReferenceGenome").attrib['id']
-                reference_genome_name = alignmentSummary.find("ReferenceGenome").attrib['name']
-                
-                category_id = "{}.{}".format(dataset_id, reference_genome_id)
-                
-                colour = bar_colours.red
-                if reference_genome_name in controls:
-                    colour = bar_colours.orange
-                elif reference_genome_name in species:
-                    colour = bar_colours.green
-                elif len(species) == 0 or 'other' in map(lambda s: s.lower(), species):
-                    colour = bar_colours.grey
-                
-                alpha = max_alpha - (max_alpha - min_alpha) * (assigned_error_rate - min_error) / (max_error - min_error)
-                alpha = max(min_alpha, min(max_alpha, alpha))
-                
-                if assigned_count >= 100:
-                    log.debug("{}\t{}\t{}\t{}".format(reference_genome_id, assigned_count, error_rate * 100.0, alpha))
+                aligned_fraction = float(aligned_count) / float(sampled_count)
+                assigned_fraction = float(assigned_count) / float(sampled_count)
+
+                if aligned_fraction >= aligned_fraction_threshold and assigned_fraction >= assigned_fraction_threshold:
+                    assigned_error_rate = float(alignmentSummary.findtext("AssignedErrorRate"))
+                    error_rate = float(alignmentSummary.findtext("ErrorRate"))
+                    
+                    reference_genome_id = alignmentSummary.find("ReferenceGenome").attrib['id']
+                    reference_genome_name = alignmentSummary.find("ReferenceGenome").attrib['name']
+                    
+                    category_id = "{}.{}".format(dataset_id, reference_genome_id)
+                    
+                    colour = bar_colours.red
+                    if reference_genome_name in controls:
+                        colour = bar_colours.orange
+                    elif reference_genome_name in species:
+                        colour = bar_colours.green
+                    elif len(species) == 0 or 'other' in map(lambda s: s.lower(), species):
+                        colour = bar_colours.grey
+                    
+                    alpha = max_alpha - (max_alpha - min_alpha) * (assigned_error_rate - min_error) / (max_error - min_error)
+                    alpha = 1.0 - max(min_alpha, min(max_alpha, alpha))
+                    
+                    if assigned_count >= 100:
+                        log.debug("{}\t{}\t{}\t{}".format(reference_genome_id, assigned_count, error_rate * 100.0, alpha))
+
                     dataset_bar_data[category_id] = assigned_count
                 
                     dataset_categories[category_id] = {
@@ -174,7 +176,7 @@ class MultiqcModule(BaseMultiqcModule):
             for category_id in dataset_bar_data.keys():
                 categories[category_id] = dataset_categories[category_id]
                     
-            log.info("Adapter count: {} / {}".format(adapter_count, sampled_count))
+            log.debug("Adapter count: {} / {}".format(adapter_count, sampled_count))
             
             dataset_bar_data['adapter'] = adapter_count
 
@@ -185,10 +187,22 @@ class MultiqcModule(BaseMultiqcModule):
             'color': bar_colours.adapter.toHtml()
         }
         
-        log.info("Bar data = {}".format(bar_data))
-        log.info("Categories = {}".format(categories))
+        log.debug("Bar data = {}".format(bar_data))
+        log.debug("Categories = {}".format(categories))
 
-        return bar_data, categories
+        plot_config = {
+            'id': "mga_plot_{}".format(run_id),
+            'title': "Multi Genome Alignment: {}".format(run_id),
+            'cpswitch_counts_label': 'Read Counts',
+            'xlab': "Lanes",
+            'ylab': "Reads",
+            'ymin': 0,
+            'ymax': max_sampled_count,
+            'use_legend': False,
+            'tt_percentages': False
+        }
+        
+        return bar_data, categories, plot_config
 
     
     def get_table_data(self, summary):
@@ -290,20 +304,27 @@ class MultiqcModule(BaseMultiqcModule):
 
         dataset_id = summary.findtext('DatasetId')
 
-        table_config = {
-            'namespace': 'mga',
-            'id': 'mga_stats_table.{}'.format(dataset_id),
-            'table_title': dataset_id,
-            'col1_header': 'Reference ID',
-            'no_beeswarm': True
-        }
-        
         table_data = dict()
         
         sequence_count = int(summary.findtext('SequenceCount'))
         sampled_count = int(summary.findtext('SampledCount'))
         adapter_count = int(summary.findtext('AdapterCount'))
         unmapped_count = int(summary.findtext('UnmappedCount'))
+
+        number_of_others = 0
+        other_assigned_count = 0
+        
+        for alignmentSummary in summary.findall("AlignmentSummaries/AlignmentSummary"):
+            aligned_count = int(alignmentSummary.findtext("AlignedCount"))
+            aligned_error = float(alignmentSummary.findtext("ErrorRate"))
+            assigned_count = int(alignmentSummary.findtext("AssignedCount"))
+            
+            aligned_fraction = float(aligned_count) / float(sampled_count)
+            assigned_fraction = float(assigned_count) / float(sampled_count)
+            
+            if not self._accept_genome(assigned_fraction, aligned_fraction, aligned_error):
+                number_of_others = number_of_others + 1
+                other_assigned_count = other_assigned_count + assigned_count
         
         for alignmentSummary in summary.findall("AlignmentSummaries/AlignmentSummary"):
             aligned_count = int(alignmentSummary.findtext("AlignedCount"))
@@ -321,9 +342,7 @@ class MultiqcModule(BaseMultiqcModule):
             aligned_fraction = float(aligned_count) / float(sampled_count)
             assigned_fraction = float(assigned_count) / float(sampled_count)
             
-            # TODO. Got to here. More filters in results.xsl.
-            
-            if aligned_fraction >= aligned_fraction_threshold and assigned_fraction >= assigned_fraction_threshold:
+            if number_of_others < 2 or self._accept_genome(assigned_fraction, aligned_fraction, aligned_error):
                 table_data[reference_genome_id] = {
                     'species': reference_genome_name,
                     'aligned_count': aligned_count,
@@ -341,10 +360,39 @@ class MultiqcModule(BaseMultiqcModule):
         # Sort into decreasing order of assigned count.
         table_data = OrderedDict(sorted(table_data.items(), key = lambda x: -x[1]['assigned_count']))
         
-        # TODO : Add others, controls, adapter
+        if number_of_others >= 2:
+            table_data['Other'] = {
+                'species': "{} others".format(number_of_others),
+                'aligned_count': other_assigned_count,
+                'aligned_perc': other_assigned_count * 100.0 / sampled_count
+            }
+        
+        table_data['Unmapped'] = {
+            'species': '',
+            'aligned_count': unmapped_count,
+            'aligned_perc': unmapped_count * 100.0 / sampled_count
+        }
+        
+        table_data['Adapter'] = {
+            'species': '',
+            'aligned_count': adapter_count,
+            'aligned_perc': adapter_count * 100.0 / sampled_count
+        }
+        
+        table_config = {
+            'namespace': 'mga',
+            'id': 'mga_stats_table.{}'.format(dataset_id),
+            'table_title': dataset_id,
+            'col1_header': 'Reference ID',
+            'no_beeswarm': True,
+            'sortRows': False
+        }
         
         return table.plot(table_data, headers, table_config)
-        
+    
+    def _accept_genome(self, assigned_fraction, aligned_fraction, aligned_error_rate):
+        return assigned_fraction >= assigned_fraction_threshold or aligned_fraction >= aligned_fraction_threshold and aligned_error_rate < error_rate_threshold
+
 
     def get_sample_information(self, summary):
         samples = []
