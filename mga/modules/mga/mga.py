@@ -110,16 +110,27 @@ class MultiqcModule(BaseMultiqcModule):
 
             for summary in dataset.findall("MultiGenomeAlignmentSummary"):
                 dataset_id = summary.findtext("DatasetId")
+                
+                sequence_count = int(summary.findtext('SequenceCount'))
+                sampled_count = int(summary.findtext('SampledCount'))
+                dataset_yield = yield_multiplier * cycles * float(sequence_count) / 1000000000.0
+                
                 self.add_section(
                     name = 'Dataset "{}" Statistics'.format(dataset_id),
-                    description = "Statistics for dataset {}".format(dataset_id),
                     anchor = "mga-stats-{}".format(dataset_id),
-                    plot = self.get_table_data(summary)
+                    plot = self.get_table_data(summary),
+                    description = '''
+                        <table>
+                            <tr><td>Yield (Gbases):</td><td>{:.2f}</td></tr>
+                            <tr><td>Sequences:</td><td>{:,}</td></tr>
+                            <tr><td>Sampled:</td><td>{:,}</td></tr>
+                        </table>
+                        <br/>
+                    '''.format(dataset_yield, sequence_count, sampled_count)
                 )
                 
                 self.add_section(
                     name = 'Dataset "{}" Samples'.format(dataset_id),
-                    description = "Sample Details for dataset {}".format(dataset_id),
                     anchor = "mga-samples-{}".format(dataset_id),
                     plot = self.get_sample_table_data(summary)
                 )
