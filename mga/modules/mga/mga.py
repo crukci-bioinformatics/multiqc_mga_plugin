@@ -88,9 +88,15 @@ class MultiqcModule(BaseMultiqcModule):
             )
 
             for summary in dataset.findall("MultiGenomeAlignmentSummary"):
+                dataset_id = summary.findtext("DatasetId")
                 self.add_section(
-                    description = "Statistics for dataset {}".format(summary.findtext("DatasetId")),
+                    description = "Statistics for dataset {}".format(dataset_id),
                     plot = self.get_table_data(summary)
+                )
+                
+                self.add_section(
+                    description = "Samples for dataset {}".format(dataset_id),
+                    plot = self.get_sample_table_data(summary)
                 )
 
 
@@ -204,13 +210,6 @@ class MultiqcModule(BaseMultiqcModule):
 
     def get_table_data(self, summary):
         headers = OrderedDict()
-        '''
-        headers['reference_id'] = {
-            'title': 'Reference ID',
-            'description': 'Internal reference genome identifier',
-            'scale': False
-        }
-        '''
         headers['species'] = {
             'title': 'Species/Reference Genome',
             'description': 'Reference genome species',
@@ -383,9 +382,92 @@ class MultiqcModule(BaseMultiqcModule):
         
         return table.plot(table_data, headers, table_config)
     
+    
+    def get_sample_table_data(self, summary):
+        headers = OrderedDict()
+        headers['sample_id'] = {
+            'title': 'Sample ID',
+            'description': 'Sample identifier',
+            'scale': False
+        }
+        headers['sample_name'] = {
+            'title': 'Sample Name',
+            'description': 'Sample name',
+            'scale': False
+        }
+        headers['group'] = {
+            'title': 'Group',
+            'description': 'Research group name',
+            'scale': False
+        }
+        headers['owner'] = {
+            'title': 'Owner',
+            'description': 'Researcher name',
+            'scale': False
+        }
+        headers['sequence_type'] = {
+            'title': 'Sequence Type',
+            'description': 'The type of material in the sample',
+            'scale': False
+        }
+        headers['end_type'] = {
+            'title': 'End Type',
+            'description': 'The sequencing method: single read or paired end',
+            'scale': False
+        }
+        headers['library_type'] = {
+            'title': 'Experiment Type',
+            'description': 'The type of library (technique) used to create the sequencing pool',
+            'scale': False
+        }
+        headers['species'] = {
+            'title': 'Species',
+            'description': 'Reference genome species',
+            'scale': False
+        }
+        headers['control'] = {
+            'title': 'Control',
+            'description': 'Whether the reference genome is a control reference or not',
+            'scale': False
+        }
+
+        dataset_id = summary.findtext('DatasetId')
+
+        table_data = OrderedDict()
+        
+        samples = self._get_sample_information(summary)
+
+        for sample in samples:
+            sample_id = sample['sampleid']
+            sample_name = sample['samplename']
+            row_id = "{} {}".format(sample_id, sample_name)
+            
+            table_data[row_id] = {
+                'sample_id': sample_id,
+                'sample_name': sample_name,
+                'group': sample.get('group'),
+                'owner': sample.get('owner'),
+                'sequence_type': sample.get('sequencetype'),
+                'end_type': sample.get('endtype'),
+                'library_type': sample.get('experimenttype'),
+                'species': sample.get('species'),
+                'control': 'Yes' if sample.get('control') else 'No'
+            }
+        
+        table_config = {
+            'namespace': 'mga',
+            'id': 'mga_sample_table.{}'.format(dataset_id),
+            'table_title': dataset_id,
+            'col1_header': 'Internal ID',
+            'no_beeswarm': True,
+            'sortRows': False
+        }
+        
+        return table.plot(table_data, headers, table_config)
+    
 
     def _get_species_and_controls(self, summary):
-        samples = self.get_sample_information(summary)
+        samples = self._get_sample_information(summary)
         
         species = set()
         controls = set()
@@ -417,17 +499,17 @@ class MultiqcModule(BaseMultiqcModule):
         return assigned_fraction >= assigned_fraction_threshold or aligned_fraction >= aligned_fraction_threshold and aligned_error_rate < error_rate_threshold
 
 
-    def get_sample_information(self, summary):
+    def _get_sample_information(self, summary):
         samples = []
         for sample in summary.findall("Samples/Sample"):
             sample_info = { 'control': 'No' }
-            self.read_properties(sample, sample_info)
+            self._read_properties(sample, sample_info)
             sample_info['control'] = sample_info['control'].lower() in ['yes','true']
             samples.append(sample_info)
         return samples
 
     
-    def read_properties(self, element, props = dict()):
+    def _read_properties(self, element, props = dict()):
         for prop in element.findall("Properties/Property"):
             try:
                 props[prop.attrib['name'].replace(' ', '').lower()] = prop.attrib['value']
