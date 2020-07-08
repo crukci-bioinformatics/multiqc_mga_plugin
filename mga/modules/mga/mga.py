@@ -8,7 +8,7 @@ import operator
 import os
 
 from collections import OrderedDict
-from lxml import objectify
+from lxml import objectify, etree
 from types import SimpleNamespace
 
 from multiqc import config
@@ -49,8 +49,8 @@ class MultiqcModule(BaseMultiqcModule):
 
         # Initialise the parent object
         super(MultiqcModule, self).__init__(
-            name = 'Multi Genome Alignemnt',
-            target = "mga",
+            name = 'Multi Genome Alignment',
+            target = "MGA",
             anchor = 'mga',
             href = "https://github.com/crukci-bioinformatics/MGA",
             info = "is used to align a sample of reads to multiple genomes for contamination screening."
@@ -65,16 +65,25 @@ class MultiqcModule(BaseMultiqcModule):
 
         log.info("Found {} reports".format(len(self.mga_data)))
         
+        count_references = etree.XPath("count(//MultiGenomeAlignmentSummaries/ReferenceGenomes/ReferenceGenome)")
+        
         for run_id, dataset in self.mga_data.items():
             bar_data, bar_categories, plot_config = self.get_bar_data(dataset)
 
             bargraph_plot_html = bargraph.plot(bar_data, bar_categories, plot_config)
             
+            trim_start = int(float(dataset.findtext("TrimStart")))
+            trim_length = int(float(dataset.findtext("TrimLength")))
+            number_of_genomes = int(count_references(dataset))
+            
             self.add_section(
                 description = 'MGA plots',
                 helptext = '''
-                Copy from the existing report.
-                ''',
+                    Sequences were sampled, trimmed to {} bases starting from position {}, and mapped to {} reference genomes
+                    (see list below) using Bowtie. Sequences containing adapters were found by ungapped alignment of the full
+                    length sequence to a set of known adapter and primer sequences using Exonerate. Further details on the
+                    alignment results and the assignment of reads to genomes are given below.
+                '''.format(trim_length, trim_start, number_of_genomes),
                 plot = bargraph_plot_html
             )
 
@@ -103,7 +112,7 @@ class MultiqcModule(BaseMultiqcModule):
         run_id = mga_data.findtext("RunID")
         bar_data = OrderedDict()
         categories = OrderedDict()
-        max_sampled_count = 0
+        max_sequenced_count = 0
         
         for summary in mga_data.findall("/MultiGenomeAlignmentSummary"):
             dataset_id = summary.findtext("DatasetId")
@@ -112,7 +121,9 @@ class MultiqcModule(BaseMultiqcModule):
             adapter_count = int(summary.findtext("AdapterCount"))
             unmapped_count = int(summary.findtext("UnmappedCount"))
             
-            max_sampled_count = max(max_sampled_count, sampled_count)
+            sampled_to_sequenced = sequence_count / sampled_count
+            
+            max_sequenced_count = max(max_sequenced_count, sequence_count)
 
             species, controls = self._get_species_and_controls(summary)
             
@@ -148,7 +159,7 @@ class MultiqcModule(BaseMultiqcModule):
                     if assigned_count >= 100:
                         log.debug("{}\t{}\t{}\t{}".format(reference_genome_id, assigned_count, aligned_error * 100.0, alpha))
     
-                    dataset_bar_data[category_id] = assigned_count
+                    dataset_bar_data[category_id] = assigned_count * sampled_to_sequenced
                 
                     dataset_categories[category_id] = {
                         'name': reference_genome_name,
@@ -165,7 +176,7 @@ class MultiqcModule(BaseMultiqcModule):
                     
             log.debug("Adapter count: {} / {}".format(adapter_count, sampled_count))
             
-            dataset_bar_data['adapter'] = adapter_count
+            dataset_bar_data['adapter'] = adapter_count * sampled_to_sequenced
 
             bar_data[dataset_id] = dataset_bar_data
 
@@ -184,7 +195,7 @@ class MultiqcModule(BaseMultiqcModule):
             'xlab': "Lanes",
             'ylab': "Reads",
             'ymin': 0,
-            'ymax': max_sampled_count,
+            'ymax': max_sequenced_count,
             'use_legend': False,
             'tt_percentages': False
         }
