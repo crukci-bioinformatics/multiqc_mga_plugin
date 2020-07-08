@@ -2,12 +2,13 @@
 
 """ MultiQC Multi Genome Alignment module """
 
-import colorsys
+import locale
 import logging
 import operator
 import os
 
 from collections import OrderedDict
+from functools import cmp_to_key
 from lxml import objectify, etree
 from types import SimpleNamespace
 
@@ -98,7 +99,7 @@ class MultiqcModule(BaseMultiqcModule):
                     <br/>
                 '''.format(dataset_props.get('flowcellid'), dataset_props.get('runname'), dataset_props.get('cycles'),
                            dataset_props.get('endtype'), total_yield, total_sequence_count),
-                anchor = 'mga-plots',
+                anchor = 'mga_plot',
                 helptext = '''
                     Sequences were sampled, trimmed to {} bases starting from position {}, and mapped to {} reference genomes
                     (see list below) using Bowtie. Sequences containing adapters were found by ungapped alignment of the full
@@ -117,7 +118,7 @@ class MultiqcModule(BaseMultiqcModule):
                 
                 self.add_section(
                     name = 'Dataset "{}" Statistics'.format(dataset_id),
-                    anchor = "mga-stats-{}".format(dataset_id),
+                    anchor = "mga_stats_{}".format(dataset_id),
                     plot = self.get_table_data(summary),
                     description = '''
                         <table>
@@ -131,10 +132,42 @@ class MultiqcModule(BaseMultiqcModule):
                 
                 self.add_section(
                     name = 'Dataset "{}" Samples'.format(dataset_id),
-                    anchor = "mga-samples-{}".format(dataset_id),
+                    anchor = "mga_samples_{}".format(dataset_id),
                     plot = self.get_sample_table_data(summary)
                 )
 
+            # See https://stackoverflow.com/questions/2440692/formatting-floats-without-trailing-zeros
+            self.add_section(
+                name = "Alignment Details",
+                anchor = "mga_alignment_details",
+                description = """
+                    Reference genomes are sorted according to how many sequence reads have been assigned to each.
+                    Separate entries are given for reference genomes for which at least {:.4g}% of reads have been assigned
+                    or for which at least {:.4g}% of reads align with an average mismatch or error rate of below {:.4g}%.
+                    
+                    In addition to the total number of reads aligning to each reference genome and the average error
+                    rate for those alignments, details are also provided for the the number of reads aligning uniquely
+                    to the reference genome and and the associated error rate for those unique reads.
+                    
+                    The 'Best' column and accompanying error rate refer to those reads that align preferentially to
+                    the given reference genome, i.e. with the fewest mismatches. These reads will include those that
+                    align uniquely and those that also align to other genomes with the same number of mismatches but
+                    which do not align to another genome with fewer mismatches.
+                    
+                    Reads that align uniquely to a genome are assigned to that genome. Reads that align equally well to
+                    multiple genomes are assigned to the genome with the highest number of reads in the 'Best' column.
+                    
+                    Note that because reads are trimmed prior to alignment with Bowtie, it is possible for a read to be
+                    counted both as aligned to one or more of the reference genomes and among the reads with adapter
+                    content. The adapter will most likely be present in the portion of the read that has been trimmed.
+                """.format(assigned_fraction_threshold * 100, aligned_fraction_threshold * 100, error_rate_threshold * 100)
+            )
+            
+            self.add_section(
+                name = "Reference Genomes",
+                anchor = "mga_reference_genomes",
+                description = self.list_reference_genomes(dataset)
+            )
 
     def read_mga_xml_file(self, mgafile):
         content = objectify.parse(mgafile["f"])
@@ -501,6 +534,23 @@ class MultiqcModule(BaseMultiqcModule):
         
         return table.plot(table_data, headers, table_config)
     
+    
+    def list_reference_genomes(self, mga_data):
+        
+        genomes = []
+        for genome in mga_data.findall("ReferenceGenomes/ReferenceGenome"):
+            genomes.append(genome.attrib['name'])
+        
+        # See https://stackoverflow.com/questions/36139/how-to-sort-a-list-of-strings
+        genomes = sorted(genomes, key = cmp_to_key(locale.strcoll))
+        
+        markdown = "Sequences were aligned to the following reference genomes ({} in total).\n\n".format(len(genomes))
+        
+        for genome in genomes:
+            markdown += "* {}\n".format(genome)
+        
+        return markdown
+
 
     def _get_species_and_controls(self, summary):
         samples = self._get_sample_information(summary)
@@ -553,4 +603,3 @@ class MultiqcModule(BaseMultiqcModule):
                 # Leave put any that have no value.
                 pass
         return props
-
