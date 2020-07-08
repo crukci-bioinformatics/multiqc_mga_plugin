@@ -65,9 +65,17 @@ class MultiqcModule(BaseMultiqcModule):
 
         log.info("Found {} reports".format(len(self.mga_data)))
         
+        sum_sequences = etree.XPath("sum(//MultiGenomeAlignmentSummaries/MultiGenomeAlignmentSummary/SequenceCount)")
         count_references = etree.XPath("count(//MultiGenomeAlignmentSummaries/ReferenceGenomes/ReferenceGenome)")
         
         for run_id, dataset in self.mga_data.items():
+            dataset_props = self._read_properties(dataset)
+            
+            total_sequence_count = sum_sequences(dataset)
+            yield_multiplier = 2 if dataset_props.get('endtype') == 'Paired End' else 1
+            cycles = int(dataset_props['cycles'])
+            total_yield = yield_multiplier * cycles * total_sequence_count / 1000000000.0
+            
             bar_data, bar_categories, plot_config = self.get_bar_data(dataset)
 
             bargraph_plot_html = bargraph.plot(bar_data, bar_categories, plot_config)
@@ -75,9 +83,22 @@ class MultiqcModule(BaseMultiqcModule):
             trim_start = int(float(dataset.findtext("TrimStart")))
             trim_length = int(float(dataset.findtext("TrimLength")))
             number_of_genomes = int(count_references(dataset))
-            
+
             self.add_section(
-                description = 'MGA plots',
+                name = 'Sequencing Results',
+                description = '''
+                    <table>
+                        <tr><td>Flow Cell ID:</td><td>{}</td></tr>
+                        <tr><td>Run name:</td><td>{}</td></tr>
+                        <tr><td>Cycles:</td><td>{}</td></tr>
+                        <tr><td>End type:</td><td>{}</td></tr>
+                        <tr><td>Yield (Gbases):</td><td>{:.2f}</td></tr>
+                        <tr><td>Total sequences:</td><td>{:,.0f}</td></tr>
+                    </table>
+                    <br/>
+                '''.format(dataset_props.get('flowcellid'), dataset_props.get('runname'), dataset_props.get('cycles'),
+                           dataset_props.get('endtype'), total_yield, total_sequence_count),
+                anchor = 'mga-plots',
                 helptext = '''
                     Sequences were sampled, trimmed to {} bases starting from position {}, and mapped to {} reference genomes
                     (see list below) using Bowtie. Sequences containing adapters were found by ungapped alignment of the full
@@ -90,12 +111,16 @@ class MultiqcModule(BaseMultiqcModule):
             for summary in dataset.findall("MultiGenomeAlignmentSummary"):
                 dataset_id = summary.findtext("DatasetId")
                 self.add_section(
+                    name = 'Dataset "{}" Statistics'.format(dataset_id),
                     description = "Statistics for dataset {}".format(dataset_id),
+                    anchor = "mga-stats-{}".format(dataset_id),
                     plot = self.get_table_data(summary)
                 )
                 
                 self.add_section(
-                    description = "Samples for dataset {}".format(dataset_id),
+                    name = 'Dataset "{}" Samples'.format(dataset_id),
+                    description = "Sample Details for dataset {}".format(dataset_id),
+                    anchor = "mga-samples-{}".format(dataset_id),
                     plot = self.get_sample_table_data(summary)
                 )
 
@@ -385,6 +410,7 @@ class MultiqcModule(BaseMultiqcModule):
     
     def get_sample_table_data(self, summary):
         headers = OrderedDict()
+        """
         headers['sample_id'] = {
             'title': 'Sample ID',
             'description': 'Sample identifier',
@@ -395,6 +421,7 @@ class MultiqcModule(BaseMultiqcModule):
             'description': 'Sample name',
             'scale': False
         }
+        """
         headers['group'] = {
             'title': 'Group',
             'description': 'Research group name',
@@ -440,11 +467,9 @@ class MultiqcModule(BaseMultiqcModule):
         for sample in samples:
             sample_id = sample['sampleid']
             sample_name = sample['samplename']
-            row_id = "{} {}".format(sample_id, sample_name)
+            row_id = "{} / {}".format(sample_id, sample_name)
             
             table_data[row_id] = {
-                'sample_id': sample_id,
-                'sample_name': sample_name,
                 'group': sample.get('group'),
                 'owner': sample.get('owner'),
                 'sequence_type': sample.get('sequencetype'),
@@ -458,7 +483,7 @@ class MultiqcModule(BaseMultiqcModule):
             'namespace': 'mga',
             'id': 'mga_sample_table.{}'.format(dataset_id),
             'table_title': dataset_id,
-            'col1_header': 'Internal ID',
+            'col1_header': 'Sample ID and name',
             'no_beeswarm': True,
             'sortRows': False
         }
