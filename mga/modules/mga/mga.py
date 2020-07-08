@@ -54,7 +54,8 @@ class MultiqcModule(BaseMultiqcModule):
             target = "MGA",
             anchor = 'mga',
             href = "https://github.com/crukci-bioinformatics/MGA",
-            info = "is used to align a sample of reads to multiple genomes for contamination screening."
+            info = """(multi-genome alignment) is a quality control tool for high-throughput sequence data
+                   written by Matthew Eldridge at the Cancer Research UK Cambridge Institute."""
         )
         
         self.mga_data = dict()
