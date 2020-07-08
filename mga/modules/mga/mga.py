@@ -102,9 +102,10 @@ class MultiqcModule(BaseMultiqcModule):
                 anchor = 'mga_plot',
                 helptext = '''
                     Sequences were sampled, trimmed to {} bases starting from position {}, and mapped to {} reference genomes
-                    (see list below) using Bowtie. Sequences containing adapters were found by ungapped alignment of the full
-                    length sequence to a set of known adapter and primer sequences using Exonerate. Further details on the
-                    alignment results and the assignment of reads to genomes are given below.
+                    ([see list below](#mga_reference_genomes)) using Bowtie. Sequences containing adapters were found by
+                    ungapped alignment of the full length sequence to a set of known adapter and primer sequences using
+                    Exonerate. Further details on the alignment results and the assignment of reads to genomes are given
+                    [below](#mga_alignment_details).
                 '''.format(trim_length, trim_start, number_of_genomes),
                 plot = bargraph_plot_html
             )
