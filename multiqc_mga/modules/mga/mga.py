@@ -30,9 +30,9 @@ bar_colours = SimpleNamespace(**{
 })
 
 max_alpha = 1.0
-min_alpha = 0.25
-max_error = 0.0025
-min_error = 0.01
+min_alpha = 0.4 # Is 0.1 in the Java version.
+max_error = 0.01
+min_error = 0.0025
 
 assigned_fraction_threshold = 0.01
 aligned_fraction_threshold = 0.01
@@ -232,8 +232,18 @@ class MultiqcModule(BaseMultiqcModule):
                     elif len(species) == 0 or 'other' in map(lambda s: s.lower(), species):
                         colour = bar_colours.grey
                     
+                    # log.debug("Dataset {} - {}".format(dataset_id, reference_genome_id))
+                    # log.debug("max_alpha - (max_alpha - min_alpha) * (assigned_error - min_error) / (max_error - min_error)")
+                    # log.debug("{} - ({} - {}) * ({} - {}) / ({} - {})".format(max_alpha, max_alpha, min_alpha, assigned_error, min_error, max_error, min_error))
+                    # log.debug("{} - {} * {} / {}".format(max_alpha, max_alpha - min_alpha, assigned_error - min_error, max_error - min_error))
+                    
                     alpha = max_alpha - (max_alpha - min_alpha) * (assigned_error - min_error) / (max_error - min_error)
-                    alpha = 1.0 - max(min_alpha, min(max_alpha, alpha))
+                    
+                    # log.debug("alpha = {}".format(alpha))
+                    
+                    alpha = max(min_alpha, min(max_alpha, alpha))
+                    
+                    # log.debug("capped alpha = {}".format(alpha))
                     
                     if assigned_count >= 100:
                         log.debug("{}\t{}\t{}\t{}".format(reference_genome_id, assigned_count, aligned_error * 100.0, alpha))
