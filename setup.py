@@ -27,13 +27,13 @@ setup(
     ],
     entry_points = {
         'multiqc.modules.v1': [
-            'mga = mga.modules.mga:MultiqcModule',
+            'mga = multiqc_mga.modules.mga:MultiqcModule',
         ],
         'multiqc.cli_options.v1': [
-            'disable_plugin = mga.cli:disable_plugin'
+            'disable_plugin = multiqc_mga.cli:disable_plugin'
         ],
         'multiqc.hooks.v1': [
-            'execution_start = mga.custom_code:mga_plugin_execution_start'
+            'execution_start = multiqc_mga.custom_code:mga_plugin_execution_start'
         ]
     },
     classifiers = [
