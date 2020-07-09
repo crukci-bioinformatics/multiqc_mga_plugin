@@ -25,6 +25,7 @@ bar_colours = SimpleNamespace(**{
     'red': Colour.fromBytes(255, 0, 0),
     'orange': Colour.fromBytes(255, 200, 0),
     'green': Colour.fromBytes(0, 255, 0),
+    'white': Colour.fromBytes(255, 255, 255),
     'grey': Colour.fromBytes(128, 128, 128),
     'adapter': Colour.fromBytes(255, 102, 255)
 })
@@ -58,6 +59,12 @@ class MultiqcModule(BaseMultiqcModule):
                    written by Matthew Eldridge at the Cancer Research UK Cambridge Institute."""
         )
         
+        # Add to self.css and self.js to be included in template
+        self.css = { 'assets/css/multiqc_mga.css' : os.path.join(os.path.dirname(__file__), 'assets', 'css', 'multiqc_mga.css') }
+
+        self.sum_sequences = etree.XPath("sum(//MultiGenomeAlignmentSummaries/MultiGenomeAlignmentSummary/SequenceCount)")
+        self.count_references = etree.XPath("count(//MultiGenomeAlignmentSummaries/ReferenceGenomes/ReferenceGenome)")
+
         self.mga_data = dict()
         for mgafile in self.find_log_files('mga', filecontents=False, filehandles=True):
             self.read_mga_xml_file(mgafile)
@@ -67,13 +74,11 @@ class MultiqcModule(BaseMultiqcModule):
 
         log.info("Found {} reports".format(len(self.mga_data)))
         
-        sum_sequences = etree.XPath("sum(//MultiGenomeAlignmentSummaries/MultiGenomeAlignmentSummary/SequenceCount)")
-        count_references = etree.XPath("count(//MultiGenomeAlignmentSummaries/ReferenceGenomes/ReferenceGenome)")
         
         for run_id, dataset in self.mga_data.items():
             dataset_props = self._read_properties(dataset)
             
-            total_sequence_count = sum_sequences(dataset)
+            total_sequence_count = self.sum_sequences(dataset)
             yield_multiplier = 2 if dataset_props.get('endtype') == 'Paired End' else 1
             cycles = int(dataset_props['cycles']) if 'cycles' in dataset_props else 0
             total_yield = yield_multiplier * cycles * total_sequence_count / 1000000000.0
@@ -84,22 +89,12 @@ class MultiqcModule(BaseMultiqcModule):
             
             trim_start = int(float(dataset.findtext("TrimStart")))
             trim_length = int(float(dataset.findtext("TrimLength")))
-            number_of_genomes = int(count_references(dataset))
+            number_of_genomes = int(self.count_references(dataset))
             
-            results_desc = "<table>"
-            for prop in dataset.findall("Properties/Property"):
-                try:
-                    results_desc += "<tr><td>{}:</td><td>{}</td></tr>".format(prop.attrib['name'], prop.attrib.get('value'))
-                except KeyError:
-                    # Leave put any that have no value.
-                    pass
-            results_desc += "<tr><td>Yield (Gbases):</td><td>{:.2f}</td></tr>".format(total_yield)
-            results_desc += "<tr><td>Total sequences:</td><td>{:,.0f}</td></tr>".format(total_sequence_count)
-            results_desc += "</table><br/>"
-
             self.add_section(
                 name = 'Sequencing Results',
-                description = results_desc,
+                description = self._plot_description_markdown(dataset, total_sequence_count, total_yield),
+                content = self._plot_key_html(),
                 anchor = 'mga_plot',
                 helptext = '''
                     Sequences were sampled, trimmed to {} bases starting from position {}, and mapped to {} reference genomes
@@ -115,6 +110,8 @@ class MultiqcModule(BaseMultiqcModule):
 
             for summary in dataset.findall("MultiGenomeAlignmentSummary"):
                 dataset_id = summary.findtext("DatasetId")
+                
+                dataset_props = self._read_properties(dataset)
                 
                 sequence_count = int(summary.findtext('SequenceCount'))
                 sampled_count = int(summary.findtext('SampledCount'))
@@ -622,3 +619,32 @@ class MultiqcModule(BaseMultiqcModule):
                 # Leave put any that have no name.
                 pass
         return props
+
+
+    def _plot_description_markdown(self, dataset, total_sequence_count, total_yield):
+        results_desc = "<table>"
+        for prop in dataset.findall("Properties/Property"):
+            try:
+                results_desc += "<tr><td>{}:</td><td>{}</td></tr>".format(prop.attrib['name'], prop.attrib.get('value'))
+            except KeyError:
+                pass
+        results_desc += "<tr><td>Yield (Gbases):</td><td>{:.2f}</td></tr>".format(total_yield)
+        results_desc += "<tr><td>Total sequences:</td><td>{:,.0f}</td></tr>".format(total_sequence_count)
+        results_desc += "</table><br/>"
+
+        return results_desc
+    
+    
+    def _plot_key_html(self):
+        key_elem_span = '<span class="multiqc_mga_key_element" style="background-color:{}">&nbsp;&nbsp;&nbsp;&nbsp;</span>&nbsp;{}\n'
+        
+        key_desc = '<div id="mga_plot_key">\n'
+        key_desc += key_elem_span.format(bar_colours.green.toHtml(), 'Sequenced&nbsp;species/genome')
+        key_desc += key_elem_span.format(bar_colours.orange.toHtml(), 'Control')
+        key_desc += key_elem_span.format(bar_colours.red.toHtml(), 'Contaminant')
+        key_desc += key_elem_span.format(bar_colours.adapter.toHtml(), 'Adapter')
+        key_desc += key_elem_span.format(bar_colours.white.toHtml(), 'Unmapped')
+        key_desc += key_elem_span.format(bar_colours.grey.toHtml(), 'Unknown')
+        key_desc += '</div>\n'
+
+        return key_desc
