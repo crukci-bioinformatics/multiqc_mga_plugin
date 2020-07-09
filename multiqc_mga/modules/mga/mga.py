@@ -200,7 +200,7 @@ class MultiqcModule(BaseMultiqcModule):
             adapter_count = int(summary.findtext("AdapterCount"))
             unmapped_count = int(summary.findtext("UnmappedCount"))
             
-            sampled_to_sequenced = sequence_count / sampled_count
+            sampled_to_sequenced = float(sequence_count) / float(sampled_count)
             
             max_sequenced_count = max(max_sequenced_count, sequence_count)
 
@@ -248,7 +248,7 @@ class MultiqcModule(BaseMultiqcModule):
                     if assigned_count >= 100:
                         log.debug("{}\t{}\t{}\t{}".format(reference_genome_id, assigned_count, aligned_error * 100.0, alpha))
     
-                    dataset_bar_data[category_id] = assigned_count * sampled_to_sequenced
+                    dataset_bar_data[category_id] = int(assigned_count * sampled_to_sequenced)
                 
                     dataset_categories[category_id] = {
                         'name': reference_genome_name,
@@ -265,7 +265,7 @@ class MultiqcModule(BaseMultiqcModule):
                     
             log.debug("Adapter count: {} / {}".format(adapter_count, sampled_count))
             
-            dataset_bar_data['adapter'] = adapter_count * sampled_to_sequenced
+            dataset_bar_data['adapter'] = int(adapter_count * sampled_to_sequenced)
 
             bar_data[dataset_id] = dataset_bar_data
 
