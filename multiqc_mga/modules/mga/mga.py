@@ -85,21 +85,21 @@ class MultiqcModule(BaseMultiqcModule):
             trim_start = int(float(dataset.findtext("TrimStart")))
             trim_length = int(float(dataset.findtext("TrimLength")))
             number_of_genomes = int(count_references(dataset))
+            
+            results_desc = "<table>"
+            for prop in dataset.findall("Properties/Property"):
+                try:
+                    results_desc += "<tr><td>{}:</td><td>{}</td></tr>".format(prop.attrib['name'], prop.attrib.get('value'))
+                except KeyError:
+                    # Leave put any that have no value.
+                    pass
+            results_desc += "<tr><td>Yield (Gbases):</td><td>{:.2f}</td></tr>".format(total_yield)
+            results_desc += "<tr><td>Total sequences:</td><td>{:,.0f}</td></tr>".format(total_sequence_count)
+            results_desc += "</table><br/>"
 
             self.add_section(
                 name = 'Sequencing Results',
-                description = '''
-                    <table>
-                        <tr><td>Flow Cell ID:</td><td>{}</td></tr>
-                        <tr><td>Run name:</td><td>{}</td></tr>
-                        <tr><td>Cycles:</td><td>{}</td></tr>
-                        <tr><td>End type:</td><td>{}</td></tr>
-                        <tr><td>Yield (Gbases):</td><td>{:.2f}</td></tr>
-                        <tr><td>Total sequences:</td><td>{:,.0f}</td></tr>
-                    </table>
-                    <br/>
-                '''.format(dataset_props.get('flowcellid'), dataset_props.get('runname'), dataset_props.get('cycles'),
-                           dataset_props.get('endtype'), total_yield, total_sequence_count),
+                description = results_desc,
                 anchor = 'mga_plot',
                 helptext = '''
                     Sequences were sampled, trimmed to {} bases starting from position {}, and mapped to {} reference genomes
@@ -600,8 +600,8 @@ class MultiqcModule(BaseMultiqcModule):
     def _read_properties(self, element, props = dict()):
         for prop in element.findall("Properties/Property"):
             try:
-                props[prop.attrib['name'].replace(' ', '').lower()] = prop.attrib['value']
+                props[prop.attrib['name'].replace(' ', '').lower()] = prop.attrib.get('value')
             except KeyError:
-                # Leave put any that have no value.
+                # Leave put any that have no name.
                 pass
         return props
