@@ -75,7 +75,7 @@ class MultiqcModule(BaseMultiqcModule):
             
             total_sequence_count = sum_sequences(dataset)
             yield_multiplier = 2 if dataset_props.get('endtype') == 'Paired End' else 1
-            cycles = int(dataset_props['cycles'])
+            cycles = int(dataset_props['cycles']) if 'cycles' in dataset_props else 0
             total_yield = yield_multiplier * cycles * total_sequence_count / 1000000000.0
             
             bar_data, bar_categories, plot_config = self.get_bar_data(dataset)
@@ -111,6 +111,8 @@ class MultiqcModule(BaseMultiqcModule):
                 plot = bargraph_plot_html
             )
 
+            sequencing_dataset = self._is_sequencing_dataset(dataset)
+
             for summary in dataset.findall("MultiGenomeAlignmentSummary"):
                 dataset_id = summary.findtext("DatasetId")
                 
@@ -119,7 +121,7 @@ class MultiqcModule(BaseMultiqcModule):
                 dataset_yield = yield_multiplier * cycles * float(sequence_count) / 1000000000.0
                 
                 self.add_section(
-                    name = 'Dataset "{}" Statistics'.format(dataset_id),
+                    name = 'Lane {} Statistics'.format(dataset_id) if sequencing_dataset else 'Dataset "{}" Statistics'.format(dataset_id),
                     anchor = "mga_stats_{}".format(dataset_id),
                     plot = self.get_table_data(summary),
                     description = '''
@@ -133,7 +135,7 @@ class MultiqcModule(BaseMultiqcModule):
                 )
                 
                 self.add_section(
-                    name = 'Dataset "{}" Samples'.format(dataset_id),
+                    name = 'Lane {} Samples'.format(dataset_id) if sequencing_dataset else 'Dataset "{}" Statistics'.format(dataset_id),
                     anchor = "mga_samples_{}".format(dataset_id),
                     plot = self.get_sample_table_data(summary)
                 )
@@ -184,14 +186,14 @@ class MultiqcModule(BaseMultiqcModule):
                 self.mga_data[run_id] = content
 
 
-    def get_bar_data(self, mga_data):
-        
-        run_id = mga_data.findtext("RunID")
+    def get_bar_data(self, dataset):
+
+        run_id = dataset.findtext("RunID")
         bar_data = OrderedDict()
         categories = OrderedDict()
         max_sequenced_count = 0
         
-        for summary in mga_data.findall("/MultiGenomeAlignmentSummary"):
+        for summary in dataset.findall("/MultiGenomeAlignmentSummary"):
             dataset_id = summary.findtext("DatasetId")
             sequence_count = int(summary.findtext("SequenceCount"))
             sampled_count = int(summary.findtext("SampledCount"))
@@ -266,11 +268,11 @@ class MultiqcModule(BaseMultiqcModule):
         log.debug("Categories = {}".format(categories))
 
         plot_config = {
-            'id': "mga_plot_{}".format(run_id),
+            'id': "mga_plot_{}".format(run_id.replace(' ', '_')),
             'title': "Multi Genome Alignment: {}".format(run_id),
             'cpswitch_counts_label': 'Read Counts',
-            'xlab': "Lanes",
-            'ylab': "Reads",
+            'xlab': "Lane" if self._is_sequencing_dataset(dataset) else "Data set",
+            'ylab': "Number of sequences",
             'ymin': 0,
             'ymax': max_sequenced_count,
             'use_legend': False,
@@ -552,6 +554,11 @@ class MultiqcModule(BaseMultiqcModule):
             markdown += "* {}\n".format(genome)
         
         return markdown
+
+
+    def _is_sequencing_dataset(self, dataset):
+        dataset_props = self._read_properties(dataset)
+        return 'flowcellid' in dataset_props or 'runname' in dataset_props
 
 
     def _get_species_and_controls(self, summary):
