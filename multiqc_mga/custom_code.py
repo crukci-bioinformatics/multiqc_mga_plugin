@@ -31,7 +31,7 @@ def mga_plugin_execution_start():
     if config.kwargs.get('disable_plugin', True):
         return None
 
-    log.info("Running Multi Genome Alignment MultiQC Plugin v{}".format(config.mga_plugin_version))
+    log.debug("Running Multi Genome Alignment MultiQC Plugin v{}".format(config.mga_plugin_version))
 
     # Add to the main MultiQC config object.
     # User config files have already been loaded at this point
