@@ -72,7 +72,11 @@ class MultiqcModule(BaseMultiqcModule):
     def load_mga_files(self):
         mga_data = dict()
         for mgafile in self.find_log_files('mga', filecontents=False, filehandles=True):
-            self._read_mga_xml_file(mga_data, mgafile)
+            with mgafile['f'] as fh:
+                try:
+                    self._read_mga_xml_file(mga_data, mgafile)
+                finally:
+                    fh.close()
 
         if len(mga_data) == 0:
             raise UserWarning
