@@ -22,11 +22,11 @@ log = config.logger
 
 # See https://stackoverflow.com/a/16279578
 bar_colours = SimpleNamespace(**{
-    'red': Colour.fromBytes(255, 0, 0),
-    'orange': Colour.fromBytes(255, 200, 0),
-    'green': Colour.fromBytes(0, 255, 0),
-    'white': Colour.fromBytes(255, 255, 255),
-    'grey': Colour.fromBytes(128, 128, 128),
+    'reference': Colour.fromBytes(0, 255, 0),
+    'control': Colour.fromBytes(255, 200, 0),
+    'contaminant': Colour.fromBytes(255, 0, 0),
+    'unmapped': Colour.fromBytes(255, 255, 255),
+    'unknown': Colour.fromBytes(128, 128, 128),
     'adapter': Colour.fromBytes(255, 102, 255)
 })
 
@@ -65,17 +65,38 @@ class MultiqcModule(BaseMultiqcModule):
         self.sum_sequences = etree.XPath("sum(//MultiGenomeAlignmentSummaries/MultiGenomeAlignmentSummary/SequenceCount)")
         self.count_references = etree.XPath("count(//MultiGenomeAlignmentSummaries/ReferenceGenomes/ReferenceGenome)")
 
-        self.mga_data = dict()
-        for mgafile in self.find_log_files('mga', filecontents=False, filehandles=True):
-            self.read_mga_xml_file(mgafile)
+        mga_data = self.load_mga_files()
+        self.create_mga_reports(mga_data)
 
-        if len(self.mga_data) == 0:
+    
+    def load_mga_files(self):
+        mga_data = dict()
+        for mgafile in self.find_log_files('mga', filecontents=False, filehandles=True):
+            self._read_mga_xml_file(mga_data, mgafile)
+
+        if len(mga_data) == 0:
             raise UserWarning
 
-        log.info("Found {} reports".format(len(self.mga_data)))
+        log.info("Found {} reports".format(len(mga_data)))
         
-        
-        for run_id, dataset in self.mga_data.items():
+        return mga_data
+
+    
+    def _read_mga_xml_file(self, mga_data, mgafile):
+        content = objectify.parse(mgafile["f"])
+        if content is None or content.getroot() is None:
+            log.warn("Failed to parse {}".format(mgafile['fn']))
+        elif content.getroot().tag != 'MultiGenomeAlignmentSummaries':
+            log.debug("{}/{} is not an MGA summary file.".format(mgafile['root'], mgafile['fn']))
+        else:
+            log.debug("Found file {}/{}".format(mgafile["root"], mgafile["fn"]))
+            run_id = content.findtext("RunID")
+            if run_id not in mga_data:
+                mga_data[run_id] = content
+
+
+    def create_mga_reports(self, mga_data):
+        for run_id, dataset in mga_data.items():
             dataset_props = self._read_properties(dataset)
             
             total_sequence_count = self.sum_sequences(dataset)
@@ -170,19 +191,6 @@ class MultiqcModule(BaseMultiqcModule):
                 description = self.list_reference_genomes(dataset)
             )
 
-    def read_mga_xml_file(self, mgafile):
-        content = objectify.parse(mgafile["f"])
-        if content is None or content.getroot() is None:
-            log.warn("Failed to parse {}".format(mgafile['fn']))
-        elif content.getroot().tag != 'MultiGenomeAlignmentSummaries':
-            log.debug("{}/{} is not an MGA summary file.".format(mgafile['root'], mgafile['fn']))
-        else:
-            log.debug("Found file {}/{}".format(mgafile["root"], mgafile["fn"]))
-            run_id = content.findtext("RunID")
-            if run_id not in self.mga_data:
-                self.mga_data[run_id] = content
-
-
     def get_bar_data(self, dataset):
 
         run_id = dataset.findtext("RunID")
@@ -221,13 +229,13 @@ class MultiqcModule(BaseMultiqcModule):
     
                     category_id = "{}.{}".format(dataset_id, reference_genome_id)
                     
-                    colour = bar_colours.red
+                    colour = bar_colours.contaminant
                     if reference_genome_name in controls:
-                        colour = bar_colours.orange
+                        colour = bar_colours.control
                     elif reference_genome_name in species:
-                        colour = bar_colours.green
+                        colour = bar_colours.reference
                     elif len(species) == 0 or 'other' in map(lambda s: s.lower(), species):
-                        colour = bar_colours.grey
+                        colour = bar_colours.unknown
                     
                     # log.debug("Dataset {} - {}".format(dataset_id, reference_genome_id))
                     # log.debug("max_alpha - (max_alpha - min_alpha) * (assigned_error - min_error) / (max_error - min_error)")
@@ -639,12 +647,12 @@ class MultiqcModule(BaseMultiqcModule):
         key_elem_span = '<span class="multiqc_mga_key_element" style="background-color:{}">&nbsp;&nbsp;&nbsp;&nbsp;</span>&nbsp;{}\n'
         
         key_desc = '<div id="mga_plot_key">\n'
-        key_desc += key_elem_span.format(bar_colours.green.toHtml(), 'Sequenced&nbsp;species/genome')
-        key_desc += key_elem_span.format(bar_colours.orange.toHtml(), 'Control')
-        key_desc += key_elem_span.format(bar_colours.red.toHtml(), 'Contaminant')
+        key_desc += key_elem_span.format(bar_colours.reference.toHtml(), 'Sequenced&nbsp;species/genome')
+        key_desc += key_elem_span.format(bar_colours.control.toHtml(), 'Control')
+        key_desc += key_elem_span.format(bar_colours.contaminant.toHtml(), 'Contaminant')
         key_desc += key_elem_span.format(bar_colours.adapter.toHtml(), 'Adapter')
-        key_desc += key_elem_span.format(bar_colours.white.toHtml(), 'Unmapped')
-        key_desc += key_elem_span.format(bar_colours.grey.toHtml(), 'Unknown')
+        key_desc += key_elem_span.format(bar_colours.unmapped.toHtml(), 'Unmapped')
+        key_desc += key_elem_span.format(bar_colours.unknown.toHtml(), 'Unknown')
         key_desc += '</div>\n'
 
         return key_desc
