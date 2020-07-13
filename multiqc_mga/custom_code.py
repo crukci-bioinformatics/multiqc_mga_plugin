@@ -27,10 +27,6 @@ def mga_plugin_execution_start():
     to use custom command line flags.
     """
 
-    # Halt execution if we've disabled the plugin
-    if config.kwargs.get('disable_plugin', True):
-        return None
-
     log.debug("Running Multi Genome Alignment MultiQC Plugin v{}".format(config.mga_plugin_version))
 
     # Add to the main MultiQC config object.

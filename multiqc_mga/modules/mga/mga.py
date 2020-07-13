@@ -45,10 +45,6 @@ class MultiqcModule(BaseMultiqcModule):
     
     def __init__(self):
 
-        # Halt execution if we've disabled the plugin
-        if config.kwargs.get('disable_plugin', True):
-            return None
-
         # Initialise the parent object
         super(MultiqcModule, self).__init__(
             name = 'Multi Genome Alignment',
@@ -62,6 +58,10 @@ class MultiqcModule(BaseMultiqcModule):
         # Add to self.css and self.js to be included in template
         self.css = { 'assets/css/multiqc_mga.css' : os.path.join(os.path.dirname(__file__), 'assets', 'css', 'multiqc_mga.css') }
 
+        # XML files we know we don't want to load and check as they're from bcl2fastq.
+        # ConversionStats.xml in particular is quite large, so we don't want to parse it.
+        self.bcl2fastq_files = [ 'ConversionStats.xml', 'DemultiplexingStats.xml' ]
+         
         self.sum_sequences = etree.XPath("sum(//MultiGenomeAlignmentSummaries/MultiGenomeAlignmentSummary/SequenceCount)")
         self.count_references = etree.XPath("count(//MultiGenomeAlignmentSummaries/ReferenceGenomes/ReferenceGenome)")
 
@@ -74,7 +74,8 @@ class MultiqcModule(BaseMultiqcModule):
         for mgafile in self.find_log_files('mga', filecontents=False, filehandles=True):
             with mgafile['f'] as fh:
                 try:
-                    self._read_mga_xml_file(mga_data, mgafile)
+                    if mgafile['fn'] not in self.bcl2fastq_files:
+                        self._read_mga_xml_file(mga_data, mgafile)
                 finally:
                     fh.close()
 
@@ -94,7 +95,7 @@ class MultiqcModule(BaseMultiqcModule):
             log.debug("{}/{} is not an MGA summary file.".format(mgafile['root'], mgafile['fn']))
         else:
             log.debug("Found file {}/{}".format(mgafile["root"], mgafile["fn"]))
-            run_id = content.findtext("RunID")
+            run_id = content.findtext("RunId")
             if run_id not in mga_data:
                 mga_data[run_id] = content
 
@@ -197,7 +198,10 @@ class MultiqcModule(BaseMultiqcModule):
 
     def get_bar_data(self, dataset):
 
-        run_id = dataset.findtext("RunID")
+        run_id = dataset.findtext("RunId")
+        if run_id is None:
+            raise UserWarning
+
         bar_data = OrderedDict()
         categories = OrderedDict()
         max_sequenced_count = 0
