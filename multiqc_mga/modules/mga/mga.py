@@ -549,6 +549,11 @@ class MultiqcModule(BaseMultiqcModule):
                 'species': sample.get('species'),
                 'control': 'Yes' if sample.get('control') else 'No'
             }
+            
+            # Make sure no element is None.
+            for key, value in table_data[row_id].items():
+                if value is None:
+                    table_data[row_id][key] = ''
         
         table_config = {
             'namespace': 'mga',
@@ -558,7 +563,7 @@ class MultiqcModule(BaseMultiqcModule):
             'no_beeswarm': True,
             'sortRows': False
         }
-        
+
         return table.plot(table_data, headers, table_config)
     
     
