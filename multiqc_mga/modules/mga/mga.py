@@ -550,7 +550,8 @@ class MultiqcModule(BaseMultiqcModule):
                 'control': 'Yes' if sample.get('control') else 'No'
             }
             
-            # Make sure no element is None.
+            # Make sure no element is None. Some keys may be in the sample properties
+            # with no value, which gives None even if the default is used above.
             for key, value in table_data[row_id].items():
                 if value is None:
                     table_data[row_id][key] = ''
