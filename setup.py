@@ -29,9 +29,6 @@ setup(
         'multiqc.modules.v1': [
             'mga = multiqc_mga.modules.mga:MultiqcModule',
         ],
-        'multiqc.cli_options.v1': [
-            'disable_plugin = multiqc_mga.cli:disable_plugin'
-        ],
         'multiqc.hooks.v1': [
             'execution_start = multiqc_mga.custom_code:mga_plugin_execution_start'
         ]
