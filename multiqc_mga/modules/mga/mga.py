@@ -294,9 +294,9 @@ class MultiqcModule(BaseMultiqcModule):
         plot_config = {
             'id': "mga_plot_{}".format(run_id.replace(' ', '_')),
             'title': "Multi Genome Alignment: {}".format(run_id),
-            'cpswitch_counts_label': 'Read Counts',
+            'cpswitch_counts_label': 'Number of reads',
             'xlab': "Lane" if self._is_sequencing_dataset(dataset) else "Data set",
-            'ylab': "Number of sequences",
+            'ylab': "Number of reads",
             'ymin': 0,
             'ymax': max_sequenced_count,
             'use_legend': False,
