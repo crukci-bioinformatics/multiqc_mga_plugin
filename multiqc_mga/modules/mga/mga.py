@@ -38,6 +38,7 @@ min_error = 0.0025
 assigned_fraction_threshold = 0.01
 aligned_fraction_threshold = 0.01
 error_rate_threshold = 0.0125
+adapter_threshold_multiplier = 0.001
 
 # Based on https://github.com/MultiQC/example-plugin
 
@@ -123,13 +124,7 @@ class MultiqcModule(BaseMultiqcModule):
                 description = self._plot_description_markdown(dataset, total_sequence_count, total_yield),
                 content = self._plot_key_html(),
                 anchor = 'mga_plot',
-                helptext = '''
-                    Sequences were sampled, trimmed to {} bases starting from position {}, and mapped to {} reference genomes
-                    ([see list below](#mga_reference_genomes)) using Bowtie. Sequences containing adapters were found by
-                    ungapped alignment of the full length sequence to a set of known adapter and primer sequences using
-                    Exonerate. Further details on the alignment results and the assignment of reads to genomes are given
-                    [below](#mga_alignment_details).
-                '''.format(trim_length, trim_start, number_of_genomes),
+                helptext = self._plot_help_markdown(dataset),
                 plot = bargraph_plot_html
             )
 
@@ -272,6 +267,8 @@ class MultiqcModule(BaseMultiqcModule):
             # Sort into decreasing order of assigned count.
             dataset_bar_data = OrderedDict(sorted(dataset_bar_data.items(), key = lambda x: -x[1]))
 
+            bar_data[dataset_id] = dataset_bar_data
+
             # The order of categories matters for the order in the plot, so add them to the
             # overall categories dictionary in the order they are in for the bar data.
             for category_id in dataset_bar_data.keys():
@@ -279,14 +276,16 @@ class MultiqcModule(BaseMultiqcModule):
 
             log.debug("Adapter count: {} / {}".format(adapter_count, sampled_count))
 
-            dataset_bar_data['adapter'] = int(adapter_count * sampled_to_sequenced)
+            if adapter_count >= sampled_count * adapter_threshold_multiplier:
+                dataset_adapter_id = ("{}A" if self._is_sequencing_dataset(dataset) else "{} adapter").format(dataset_id)
+                category_id = "{}.adapter".format(dataset_id)
+                dataset_bar_data = { category_id: int(adapter_count * sampled_to_sequenced) }
+                bar_data[dataset_adapter_id] = dataset_bar_data
+                categories[category_id] = {
+                    'name': 'Adapter',
+                    'color': bar_colours.adapter.toHtml()
+                }
 
-            bar_data[dataset_id] = dataset_bar_data
-
-        categories['adapter'] = {
-            'name': 'Adapter',
-            'color': bar_colours.adapter.toHtml()
-        }
 
         log.debug("Bar data = {}".format(bar_data))
         log.debug("Categories = {}".format(categories))
@@ -651,6 +650,38 @@ class MultiqcModule(BaseMultiqcModule):
         results_desc += "</table><br/>"
 
         return results_desc
+
+
+    def _plot_help_markdown(self, dataset):
+        trim_start = int(float(dataset.findtext("TrimStart")))
+        trim_length = int(float(dataset.findtext("TrimLength")))
+        number_of_genomes = int(self.count_references(dataset))
+        
+        helptext = '''
+            Sequences were sampled, trimmed to {} bases starting from position {}, and mapped to {} reference genomes
+            ([see list below](#mga_reference_genomes)) using Bowtie. Sequences containing adapters were found by
+            ungapped alignment of the full length sequence to a set of known adapter and primer sequences using
+            Exonerate. Further details on the alignment results and the assignment of reads to genomes are given
+            [below](#mga_alignment_details).
+        '''.strip().format(trim_length, trim_start, number_of_genomes)
+        
+        helptext += "\n\n"
+        
+        if self._is_sequencing_dataset(dataset):
+            helptext += """
+                Some lanes may have an addition bar with the suffix "A" (e.g. "1A" for lane 1).
+                This is the adapter when the number of adapter reads is significant, equal to or
+                above {:.1%} of the number of sampled reads.
+            """.strip().format(adapter_threshold_multiplier)
+        else:
+            helptext += """
+                Some data sets may have an addition bar with the suffix "adapter".
+                This is the adapter when the number of adapter reads is significant for the
+                data set, equal to or above {:.1%} of the number of sampled reads.
+            """.strip().format(adapter_threshold_multiplier)
+            
+        
+        return helptext
 
 
     def _plot_key_html(self):
