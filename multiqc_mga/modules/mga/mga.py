@@ -322,19 +322,17 @@ class MultiqcModule(BaseMultiqcModule):
         headers['aligned_perc'] = {
             'title': 'Aligned %',
             'description': 'Percentage of reads aligned',
-            'suffix': '%',
             'min': 0,
             'max': 100,
-            'format': '{:,.1f}',
+            'format': '{:,.1%}',
             'scale': False
         }
         headers['aligned_error'] = {
             'title': 'Error rate',
             'description': 'Aligned error rate',
-            'suffix': '%',
             'min': 0,
             'max': 100,
-            'format': '{:,.2f}',
+            'format': '{:,.2%}',
             'scale': False
         }
         headers['unique_count'] = {
@@ -347,10 +345,9 @@ class MultiqcModule(BaseMultiqcModule):
         headers['unique_error'] = {
             'title': 'Error rate',
             'description': 'Uniquely aligned error rate',
-            'suffix': '%',
             'min': 0,
             'max': 100,
-            'format': '{:,.2f}',
+            'format': '{:,.2%}',
             'scale': False
         }
         headers['preferred_count'] = {
@@ -363,10 +360,9 @@ class MultiqcModule(BaseMultiqcModule):
         headers['preferred_error'] = {
             'title': 'Error rate',
             'description': 'Error rate for best aligned reads',
-            'suffix': '%',
             'min': 0,
             'max': 100,
-            'format': '{:,.2f}',
+            'format': '{:,.2%}',
             'scale': False
         }
         headers['assigned_count'] = {
@@ -388,10 +384,9 @@ class MultiqcModule(BaseMultiqcModule):
         headers['assigned_error'] = {
             'title': 'Error rate',
             'description': 'Assigned error rate',
-            'suffix': '%',
             'min': 0,
             'max': 100,
-            'format': '{:,.2f}',
+            'format': '{:,.2%}',
             'scale': False
         }
 
@@ -435,15 +430,15 @@ class MultiqcModule(BaseMultiqcModule):
                 table_data[reference_genome_id] = {
                     'species': reference_genome_name,
                     'aligned_count': aligned_count,
-                    'aligned_perc': aligned_fraction * 100.0,
-                    'aligned_error': aligned_error * 100.0,
+                    'aligned_perc': aligned_fraction,
+                    'aligned_error': aligned_error,
                     'unique_count': unique_count,
-                    'unique_error': unique_error * 100.0,
+                    'unique_error': unique_error,
                     'preferred_count': preferred_count,
-                    'preferred_error': preferred_error * 100.0,
+                    'preferred_error': preferred_error,
                     'assigned_count': assigned_count,
-                    'assigned_perc': assigned_fraction * 100.0,
-                    'assigned_error': assigned_error * 100.0
+                    'assigned_perc': assigned_fraction,
+                    'assigned_error': assigned_error
                 }
 
         # Sort into decreasing order of assigned count.
@@ -453,19 +448,19 @@ class MultiqcModule(BaseMultiqcModule):
             table_data['Other'] = {
                 'species': "{} others".format(number_of_others),
                 'aligned_count': other_assigned_count,
-                'aligned_perc': other_assigned_count * 100.0 / sampled_count
+                'aligned_perc': other_assigned_count / sampled_count
             }
 
         table_data['Unmapped'] = {
             'species': '',
             'aligned_count': unmapped_count,
-            'aligned_perc': unmapped_count * 100.0 / sampled_count
+            'aligned_perc': unmapped_count / sampled_count
         }
 
         table_data['Adapter'] = {
             'species': '',
             'aligned_count': adapter_count,
-            'aligned_perc': adapter_count * 100.0 / sampled_count
+            'aligned_perc': adapter_count / sampled_count
         }
 
         table_config = {
