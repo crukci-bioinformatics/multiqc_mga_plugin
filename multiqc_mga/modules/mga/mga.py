@@ -38,7 +38,7 @@ min_error = 0.0025
 assigned_fraction_threshold = 0.01
 aligned_fraction_threshold = 0.01
 error_rate_threshold = 0.0125
-adapter_threshold_multiplier = 0.001
+adapter_threshold_multiplier = 0.005
 
 # Based on https://github.com/MultiQC/example-plugin
 
@@ -316,7 +316,8 @@ class MultiqcModule(BaseMultiqcModule):
             'description': 'Number of reads aligned',
             'min': 0,
             'format': '{:d}',
-            'scale': False
+            'scale': False,
+            #'shared_key': 'read_count'
         }
         headers['aligned_perc'] = {
             'title': 'Aligned %',
@@ -324,7 +325,8 @@ class MultiqcModule(BaseMultiqcModule):
             'min': 0,
             'max': 100,
             'format': '{:,.1%}',
-            'scale': False
+            'scale': False,
+            #'shared_key': 'percent_aligned'
         }
         headers['aligned_error'] = {
             'title': 'Error rate',
@@ -339,7 +341,8 @@ class MultiqcModule(BaseMultiqcModule):
             'description': 'Number of uniquely aligned reads',
             'min': 0,
             'format': '{:d}',
-            'scale': False
+            'scale': False,
+            #'shared_key': 'read_count'
         }
         headers['unique_error'] = {
             'title': 'Error rate',
@@ -354,7 +357,8 @@ class MultiqcModule(BaseMultiqcModule):
             'description': 'Number of reads for which the genome is the best alignment',
             'min': 0,
             'format': '{:d}',
-            'scale': False
+            'scale': False,
+            #'shared_key': 'read_count'
         }
         headers['preferred_error'] = {
             'title': 'Error rate',
@@ -369,7 +373,8 @@ class MultiqcModule(BaseMultiqcModule):
             'description': 'Number of reads assigned',
             'min': 0,
             'format': '{:d}',
-            'scale': False
+            'scale': False,
+            #'shared_key': 'read_count'
         }
         headers['assigned_perc'] = {
             'title': 'Assigned %',
@@ -378,7 +383,8 @@ class MultiqcModule(BaseMultiqcModule):
             'min': 0,
             'max': 100,
             'format': '{:,.1f}',
-            'scale': False
+            'scale': False,
+            #'shared_key': 'percent_aligned'
         }
         headers['assigned_error'] = {
             'title': 'Error rate',
@@ -691,9 +697,9 @@ class MultiqcModule(BaseMultiqcModule):
         key_desc += key_elem_span.format(bar_colours.reference.toHtml(), 'Sequenced&nbsp;species/genome')
         key_desc += key_elem_span.format(bar_colours.control.toHtml(), 'Control')
         key_desc += key_elem_span.format(bar_colours.contaminant.toHtml(), 'Contaminant')
-        key_desc += key_elem_span.format(bar_colours.adapter.toHtml(), 'Adapter')
         key_desc += key_elem_span.format(bar_colours.unmapped.toHtml(), 'Unmapped')
         key_desc += key_elem_span.format(bar_colours.unknown.toHtml(), 'Unknown')
+        key_desc += key_elem_span.format(bar_colours.adapter.toHtml(), 'Adapter')
         key_desc += '</div>\n'
 
         return key_desc
