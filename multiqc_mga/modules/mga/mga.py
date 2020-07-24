@@ -35,7 +35,7 @@ min_alpha = 0.4 # Is 0.1 in the Java version.
 max_error = 0.01
 min_error = 0.0025
 
-gigabases = 1000000000.0
+gigabase = 1e9
 
 assigned_fraction_threshold = 0.01
 aligned_fraction_threshold = 0.01
@@ -165,7 +165,7 @@ class MultiqcModule(BaseMultiqcModule):
             for reference in content.findall("ReferenceGenomes/ReferenceGenome"):
                 reference_genomes[reference.attrib['id']] = reference.attrib['name']
 
-        run_info['total_yield'] = run_info['yield_multiplier'] * run_info['cycles'] * run_info['total_sequence_count'] / gigabases
+        run_info['total_yield'] = run_info['yield_multiplier'] * run_info['cycles'] * run_info['total_sequence_count'] / gigabase
 
         run_info = SimpleNamespace(**run_info)
 
@@ -194,7 +194,7 @@ class MultiqcModule(BaseMultiqcModule):
 
                 sequence_count = int(mga_summary.findtext('SequenceCount'))
                 sampled_count = int(mga_summary.findtext('SampledCount'))
-                dataset_yield = run_info.yield_multiplier * run_info.cycles * float(sequence_count) / gigabases
+                dataset_yield = run_info.yield_multiplier * run_info.cycles * float(sequence_count) / gigabase
 
                 self.add_section(
                     name = f'Lane {dataset_id} Statistics' if run_info.from_sequencing else f'Dataset "{mga_summary}" Statistics',
