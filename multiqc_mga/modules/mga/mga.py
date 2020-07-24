@@ -67,18 +67,18 @@ class MultiqcModule(BaseMultiqcModule):
                                 'runParameters.xml', 'RunParameters.xml', 'LaserPowerVariability.xml' ]
 
         mga_data = self.load_mga_files()
-        
+
         self.create_mga_reports(mga_data)
 
 
     def load_mga_files(self):
         """Find and load the content of MGA XML files.
-        
+
         :return A dictionary of run id (MGA, not necessary sequencing) to a list of XML
         trees with content for that run.
         :rtype dict
         """
-        
+
         mga_data = dict()
         for mgafile in self.find_log_files('mga', filecontents=False, filehandles=True):
             with mgafile['f'] as fh:
@@ -90,7 +90,7 @@ class MultiqcModule(BaseMultiqcModule):
 
         if len(mga_data) == 0:
             raise UserWarning
-        
+
         log.info("Found {} reports".format(len(mga_data)))
 
         return mga_data
@@ -98,12 +98,12 @@ class MultiqcModule(BaseMultiqcModule):
 
     def _read_mga_xml_file(self, mga_data, mgafile):
         """Read a potential MGA XML file.
-        
+
         This method has to load the content to make sure the file is from MGA. Ideally,
         MultiQC should be configured to have a more constrained name than "*.xml".
         Suitable content is added to the mga_data dictionary. Multiple content for the
         same run is added to the list stored in the dictionary.
-        
+
         :param dict mga_data: A dictionary into which found content can be added, keyed by run id.
         :param dict mgafile: The XML file load which may or may not be an MGA file.
         """
@@ -123,19 +123,19 @@ class MultiqcModule(BaseMultiqcModule):
                     mga_data[run_id] = datasets
                 datasets.append(content)
 
-    
+
     def _merge_run_summaries(self, run_datasets):
         run_info = None
         mga_summaries_by_id = dict()
         reference_genomes = dict()
-        
+
         for content in run_datasets:
             run_name = content.findtext("RunId")
             assert run_name is not None
-            
+
             if run_info is None:
                 summary_props = self._read_properties(content)
-                    
+
                 run_info = {
                     'run_id': run_name,
                     'trim_start': int(float(content.findtext("TrimStart"))),
@@ -149,7 +149,7 @@ class MultiqcModule(BaseMultiqcModule):
                     'max_sequence_count': 0,
                     'total_sequence_count': 0
                 }
-                
+
             for mga_summary in content.findall("MultiGenomeAlignmentSummary"):
                 dataset_id = mga_summary.findtext("DatasetId")
                 assert dataset_id is not None
@@ -157,28 +157,28 @@ class MultiqcModule(BaseMultiqcModule):
                     log.warn(f'MGA run "{run_name}" has more than one occurrence of mga_summary "{dataset_id}".')
                 else:
                     mga_summaries_by_id[dataset_id] = mga_summary
-                    
+
                     sequence_count = int(mga_summary.findtext("SequenceCount"))
                     run_info['max_sequence_count'] = max(run_info['max_sequence_count'], sequence_count)
                     run_info['total_sequence_count'] = run_info['total_sequence_count'] + sequence_count
-            
+
             for reference in content.findall("ReferenceGenomes/ReferenceGenome"):
                 reference_genomes[reference.attrib['id']] = reference.attrib['name']
 
         run_info['total_yield'] = run_info['yield_multiplier'] * run_info['cycles'] * run_info['total_sequence_count'] / gigabases
-        
+
         run_info = SimpleNamespace(**run_info)
-        
+
         log.debug("Run {} has {} summaries and {} reference genomes.".format(
                   run_info.run_id, len(run_info.mga_summaries), len(run_info.reference_genomes)))
-        
+
         return run_info
 
 
     def create_mga_reports(self, mga_data):
         for run_id, run_contents in mga_data.items():
             run_info = self._merge_run_summaries(run_contents)
-            
+
             plot_data, plot_categories = self._plot_data(run_info)
 
             self.add_section(
@@ -191,11 +191,11 @@ class MultiqcModule(BaseMultiqcModule):
             )
 
             for dataset_id, mga_summary in run_info.mga_summaries.items():
-                
+
                 sequence_count = int(mga_summary.findtext('SequenceCount'))
                 sampled_count = int(mga_summary.findtext('SampledCount'))
                 dataset_yield = run_info.yield_multiplier * run_info.cycles * float(sequence_count) / gigabases
-                
+
                 self.add_section(
                     name = f'Lane {dataset_id} Statistics' if run_info.from_sequencing else f'Dataset "{mga_summary}" Statistics',
                     anchor = f"mga_stats_{dataset_id}",
@@ -228,29 +228,29 @@ class MultiqcModule(BaseMultiqcModule):
             sampled_count = int(mga_summary.findtext("SampledCount"))
             adapter_count = int(mga_summary.findtext("AdapterCount"))
             unmapped_count = int(mga_summary.findtext("UnmappedCount"))
-    
+
             sampled_to_sequenced = float(sequence_count) / float(sampled_count)
-    
+
             species, controls = self._get_species_and_controls(mga_summary)
-    
+
             log.debug("Dataset {} Species: {}".format(dataset_id, species))
             log.debug("Dataset {} Controls: {}".format(dataset_id, controls))
-    
+
             dataset_bar_data = dict()
             dataset_categories = dict()
-    
+
             for alignment_summary in mga_summary.findall("AlignmentSummaries/AlignmentSummary"):
                 if self._accept_genome(species, mga_summary, alignment_summary):
                     aligned_count = int(alignment_summary.findtext("AlignedCount"))
                     aligned_error = float(alignment_summary.findtext("ErrorRate"))
                     assigned_count = int(alignment_summary.findtext("AssignedCount"))
                     assigned_error = float(alignment_summary.findtext("AssignedErrorRate"))
-    
+
                     reference_genome_id = alignment_summary.find("ReferenceGenome").attrib['id']
                     reference_genome_name = alignment_summary.find("ReferenceGenome").attrib['name']
-    
+
                     category_id = f"{dataset_id}.{reference_genome_id}"
-    
+
                     colour = bar_colours.contaminant
                     if reference_genome_name in controls:
                         colour = bar_colours.control
@@ -258,42 +258,42 @@ class MultiqcModule(BaseMultiqcModule):
                         colour = bar_colours.reference
                     elif len(species) == 0 or 'other' in map(lambda s: s.lower(), species):
                         colour = bar_colours.unknown
-    
+
                     # log.debug("Dataset {} - {}".format(dataset_id, reference_genome_id))
                     # log.debug("max_alpha - (max_alpha - min_alpha) * (assigned_error - min_error) / (max_error - min_error)")
                     # log.debug("{} - ({} - {}) * ({} - {}) / ({} - {})".format(max_alpha, max_alpha, min_alpha, assigned_error, min_error, max_error, min_error))
                     # log.debug("{} - {} * {} / {}".format(max_alpha, max_alpha - min_alpha, assigned_error - min_error, max_error - min_error))
-    
+
                     alpha = max_alpha - (max_alpha - min_alpha) * (assigned_error - min_error) / (max_error - min_error)
-    
+
                     # log.debug("alpha = {}".format(alpha))
-    
+
                     alpha = max(min_alpha, min(max_alpha, alpha))
-    
+
                     # log.debug("capped alpha = {}".format(alpha))
-    
+
                     if assigned_count >= 100:
                         log.debug("{}\t{}\t{}\t{}".format(reference_genome_id, assigned_count, aligned_error * 100.0, alpha))
-    
+
                     dataset_bar_data[category_id] = int(assigned_count * sampled_to_sequenced)
-    
+
                     dataset_categories[category_id] = {
                         'name': reference_genome_name,
                         'color': colour.applyAlpha(alpha).toHtml()
                     }
-    
+
             # Sort into decreasing order of assigned count.
             dataset_bar_data = OrderedDict(sorted(dataset_bar_data.items(), key = lambda x: -x[1]))
-    
+
             bar_data[dataset_id] = dataset_bar_data
-    
+
             # The order of categories matters for the order in the plot, so add them to the
             # overall categories dictionary in the order they are in for the bar data.
             for category_id in dataset_bar_data.keys():
                 categories[category_id] = dataset_categories[category_id]
-    
+
             log.debug(f"Adapter count: {adapter_count} / {sampled_count}")
-    
+
             if adapter_count >= sampled_count * adapter_threshold_multiplier:
                 dataset_adapter_id = f"{dataset_id}A" if run_info.from_sequencing else f"{dataset_id} adapter"
                 category_id = f"{dataset_id}.adapter"
@@ -310,7 +310,7 @@ class MultiqcModule(BaseMultiqcModule):
 
         return bar_data, categories
 
-    
+
     def _plot_config(self, run_info):
         return {
             'id': "mga_plot_{}".format(run_info.run_id.replace(' ', '_')),
@@ -352,10 +352,10 @@ class MultiqcModule(BaseMultiqcModule):
         key_desc += '</div>\n'
 
         return key_desc
-    
-    
+
+
     def _plot_help(self, run_info):
-        
+
         # See https://stackoverflow.com/questions/36139/how-to-sort-a-list-of-strings
         genomes = sorted(run_info.reference_genomes.values(), key = cmp_to_key(locale.strcoll))
         number_of_genomes = len(genomes)
@@ -367,7 +367,7 @@ class MultiqcModule(BaseMultiqcModule):
             primer sequences using Exonerate.
 
         """
-        
+
         if run_info.from_sequencing:
             help += f"""
                 Some lanes may have an addition bar with the suffix "A" (e.g. "1A" for lane 1).
@@ -386,7 +386,7 @@ class MultiqcModule(BaseMultiqcModule):
         help += f"""
 
             #### Alignment Details
-            
+
             Reference genomes are sorted according to how many sequence reads have been assigned to each.
             Separate entries are given for reference genomes for which at least {assigned_fraction_threshold * 100:.4g}%
             of reads have been assigned or for which at least {aligned_fraction_threshold * 100:.4g}% of reads align
@@ -407,11 +407,11 @@ class MultiqcModule(BaseMultiqcModule):
             Note that because reads are trimmed prior to alignment with Bowtie, it is possible for a read to be
             counted both as aligned to one or more of the reference genomes and among the reads with adapter
             content. The adapter will most likely be present in the portion of the read that has been trimmed.
-            
+
             #### Reference Genomes
 
             Sequences were aligned to the following reference genomes ({number_of_genomes} in total).
-        
+
         """
 
         for genome in genomes:
@@ -419,9 +419,9 @@ class MultiqcModule(BaseMultiqcModule):
 
         return self._strip_from_lines(help)
 
-    
+
     def _main_table_data(self, mga_summary):
-        
+
         dataset_id = mga_summary.findtext('DatasetId')
         sequence_count = int(mga_summary.findtext('SequenceCount'))
         sampled_count = int(mga_summary.findtext('SampledCount'))
@@ -587,8 +587,8 @@ class MultiqcModule(BaseMultiqcModule):
             'scale': False
         }
         return headers
-    
-    
+
+
     def _main_table_config(self, dataset_id):
         return {
             'namespace': 'mga',
@@ -605,28 +605,23 @@ class MultiqcModule(BaseMultiqcModule):
 
         table_data = OrderedDict()
 
-        samples = self._get_sample_information(mga_summary)
+        for sample_xml in mga_summary.findall("Samples/Sample"):
+            sample_id = None
+            sample_name = None
+            sample_info = dict()
+            for name, value in self._read_properties(sample_xml).items():
+                key = name.lower().replace(' ', '_')
+                if key == 'sample_id':
+                    sample_id = value
+                elif key == 'sample_name':
+                    sample_name = value
+                else:
+                    # Make sure no element is None. Some keys may be in the sample properties
+                    # with no value.
+                    sample_info[key] = '' if value is None else value
 
-        for sample in samples:
-            sample_id = sample['Sample ID']
-            sample_name = sample['Sample name']
             row_id = f"{sample_id} / {sample_name}"
-
-            table_data[row_id] = {
-                'group': sample.get('Group'),
-                'owner': sample.get('Owner'),
-                'sequence_type': sample.get('Sequence type'),
-                'end_type': sample.get('End type'),
-                'library_type': sample.get('Experiment type'),
-                'species': sample.get('Species'),
-                'control': 'Yes' if sample.get('Control') else 'No'
-            }
-
-            # Make sure no element is None. Some keys may be in the sample properties
-            # with no value, which gives None even if the default is used above.
-            for key, value in table_data[row_id].items():
-                if value is None:
-                    table_data[row_id][key] = ''
+            table_data[row_id] = sample_info
 
         return table_data
 
@@ -678,7 +673,8 @@ class MultiqcModule(BaseMultiqcModule):
             'table_title': dataset_id,
             'col1_header': "Pool / Sample" if run_info.from_sequencing else "Sample ID / Name",
             'no_beeswarm': True,
-            'sortRows': False
+            'sortRows': False,
+            'only_defined_headers': True
         }
 
 
@@ -733,7 +729,7 @@ class MultiqcModule(BaseMultiqcModule):
                 # Leave out any that have no name.
                 pass
         return props
-    
+
     def _strip_from_lines(self, str):
         lines = [ l.strip() for l in str.splitlines() ]
         return "\n".join(lines)
