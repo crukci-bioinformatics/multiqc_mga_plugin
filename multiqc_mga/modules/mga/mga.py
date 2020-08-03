@@ -126,6 +126,15 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def _merge_run_summaries(self, run_datasets):
+        '''
+        Merge the XML trees for a single run id into a more useful form.
+        
+        :param run_datasets: The list of MGA summaries (XML trees) whose run ids are all the same.
+        
+        :return A dictionary that contains the summary of the information gathered for the run,
+        all the MGA summary information into a dictionary keyed by dataset id,
+        and all the reference genomes used.
+        '''
         run_info = None
         mga_summaries_by_id = dict()
         reference_genomes = dict()
@@ -143,7 +152,6 @@ class MultiqcModule(BaseMultiqcModule):
                     'trim_length': int(float(content.findtext("TrimLength"))),
                     'properties': summary_props,
                     'from_sequencing': 'Flow Cell ID' in summary_props or 'Run name' in summary_props,
-                    'mga_summaries': mga_summaries_by_id,
                     'reference_genomes': reference_genomes,
                     'yield_multiplier': 2 if summary_props.get('End type') == 'Paired End' else 1,
                     'cycles': int(summary_props.get('Cycles', '0')),
@@ -168,6 +176,9 @@ class MultiqcModule(BaseMultiqcModule):
 
         run_info['total_yield'] = run_info['yield_multiplier'] * run_info['cycles'] * run_info['total_sequence_count'] / gigabase
 
+        # Sort the datasets into a natural order for their dataset id.
+        run_info['mga_summaries'] = OrderedDict(natsorted(mga_summaries_by_id.items(), key = lambda x: x[0]))
+
         run_info = SimpleNamespace(**run_info)
 
         log.debug("Run {} has {} summaries and {} reference genomes.".format(
@@ -191,10 +202,7 @@ class MultiqcModule(BaseMultiqcModule):
                 plot = bargraph.plot(plot_data, plot_categories, self._plot_config(run_info))
             )
 
-            dataset_ids = natsorted(run_info.mga_summaries.keys())
-            
-            for dataset_id in dataset_ids:
-                mga_summary = run_info.mga_summaries[dataset_id]
+            for dataset_id, mga_summary in run_info.mga_summaries.items():
 
                 sequence_count = int(mga_summary.findtext('SequenceCount'))
                 sampled_count = int(mga_summary.findtext('SampledCount'))
@@ -223,13 +231,10 @@ class MultiqcModule(BaseMultiqcModule):
 
     def _plot_data(self, run_info):
 
-        dataset_ids = natsorted(run_info.mga_summaries.keys())
-
         bar_data = OrderedDict()
         categories = OrderedDict()
 
-        for dataset_id in dataset_ids:
-            mga_summary = run_info.mga_summaries[dataset_id]
+        for dataset_id, mga_summary in run_info.mga_summaries.items():
             sequence_count = int(mga_summary.findtext("SequenceCount"))
             sampled_count = int(mga_summary.findtext("SampledCount"))
             adapter_count = int(mga_summary.findtext("AdapterCount"))
@@ -363,7 +368,7 @@ class MultiqcModule(BaseMultiqcModule):
     def _plot_help(self, run_info):
 
         # See https://stackoverflow.com/questions/36139/how-to-sort-a-list-of-strings
-        genomes = sorted(run_info.reference_genomes.values(), key = cmp_to_key(locale.strcoll))
+        genomes = natsorted(run_info.reference_genomes.values(), key = cmp_to_key(locale.strcoll))
         number_of_genomes = len(genomes)
 
         help = f"""
