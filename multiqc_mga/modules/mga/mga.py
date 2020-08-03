@@ -10,6 +10,7 @@ import os
 from collections import OrderedDict
 from functools import cmp_to_key
 from lxml import objectify, etree
+from natsort import natsorted
 from types import SimpleNamespace
 
 from multiqc import config
@@ -190,7 +191,10 @@ class MultiqcModule(BaseMultiqcModule):
                 plot = bargraph.plot(plot_data, plot_categories, self._plot_config(run_info))
             )
 
-            for dataset_id, mga_summary in run_info.mga_summaries.items():
+            dataset_ids = natsorted(run_info.mga_summaries.keys())
+            
+            for dataset_id in dataset_ids:
+                mga_summary = run_info.mga_summaries[dataset_id]
 
                 sequence_count = int(mga_summary.findtext('SequenceCount'))
                 sampled_count = int(mga_summary.findtext('SampledCount'))
@@ -219,11 +223,13 @@ class MultiqcModule(BaseMultiqcModule):
 
     def _plot_data(self, run_info):
 
+        dataset_ids = natsorted(run_info.mga_summaries.keys())
+
         bar_data = OrderedDict()
         categories = OrderedDict()
 
-        for dataset_id, mga_summary in run_info.mga_summaries.items():
-            dataset_id = mga_summary.findtext("DatasetId")
+        for dataset_id in dataset_ids:
+            mga_summary = run_info.mga_summaries[dataset_id]
             sequence_count = int(mga_summary.findtext("SequenceCount"))
             sampled_count = int(mga_summary.findtext("SampledCount"))
             adapter_count = int(mga_summary.findtext("AdapterCount"))
