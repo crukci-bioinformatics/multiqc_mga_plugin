@@ -36,8 +36,6 @@ min_alpha = 0.4 # Is 0.1 in the Java version.
 max_error = 0.01
 min_error = 0.0025
 
-gigabase = 1e9
-
 assigned_fraction_threshold = 0.01
 aligned_fraction_threshold = 0.01
 error_rate_threshold = 0.0125
@@ -153,8 +151,6 @@ class MultiqcModule(BaseMultiqcModule):
                     'properties': summary_props,
                     'from_sequencing': 'Flow Cell ID' in summary_props or 'Run name' in summary_props,
                     'reference_genomes': reference_genomes,
-                    'yield_multiplier': 2 if summary_props.get('End type') == 'Paired End' else 1,
-                    'cycles': int(summary_props.get('Cycles', '0')),
                     'max_sequence_count': 0,
                     'total_sequence_count': 0
                 }
@@ -173,8 +169,6 @@ class MultiqcModule(BaseMultiqcModule):
 
             for reference in content.findall("ReferenceGenomes/ReferenceGenome"):
                 reference_genomes[reference.attrib['id']] = reference.attrib['name']
-
-        run_info['total_yield'] = run_info['yield_multiplier'] * run_info['cycles'] * run_info['total_sequence_count'] / gigabase
 
         # Sort the datasets into a natural order for their dataset id.
         run_info['mga_summaries'] = OrderedDict(natsorted(mga_summaries_by_id.items(), key = lambda x: x[0]))
@@ -206,7 +200,6 @@ class MultiqcModule(BaseMultiqcModule):
 
                 sequence_count = int(mga_summary.findtext('SequenceCount'))
                 sampled_count = int(mga_summary.findtext('SampledCount'))
-                dataset_yield = run_info.yield_multiplier * run_info.cycles * float(sequence_count) / gigabase
 
                 self.add_section(
                     name = f'Lane {dataset_id} Statistics' if run_info.from_sequencing else f'Dataset "{mga_summary}" Statistics',
@@ -214,7 +207,6 @@ class MultiqcModule(BaseMultiqcModule):
                     plot = table.plot(self._main_table_data(mga_summary), self._main_table_headers(), self._main_table_config(dataset_id)),
                     description = f"""
                         <table>
-                            <tr><td>Yield (Gbases):</td><td>{dataset_yield:.2f}</td></tr>
                             <tr><td>Sequences:</td><td>{sequence_count:,}</td></tr>
                             <tr><td>Sampled:</td><td>{sampled_count:,}</td></tr>
                         </table>
@@ -343,7 +335,6 @@ class MultiqcModule(BaseMultiqcModule):
                 results_desc += "<tr><td>{}:</td><td>{}</td></tr>".format(name, value)
             except KeyError:
                 pass
-        results_desc += f"<tr><td>Yield (Gbases):</td><td>{run_info.total_yield:.2f}</td></tr>"
         results_desc += f"<tr><td>Total sequences:</td><td>{run_info.total_sequence_count:,.0f}</td></tr>"
         results_desc += "</table><br/>"
 
