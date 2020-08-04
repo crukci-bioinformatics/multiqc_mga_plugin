@@ -594,7 +594,7 @@ class MultiqcModule(BaseMultiqcModule):
     def _main_table_config(self, dataset_id):
         return {
             'namespace': 'mga',
-            'id': f'mga_stats_table.{dataset_id}',
+            'id': f'mga_stats_table_{dataset_id}',
             'table_title': dataset_id,
             'col1_header': 'Reference ID',
             'no_beeswarm': True,
@@ -671,7 +671,7 @@ class MultiqcModule(BaseMultiqcModule):
     def _sample_table_config(self, run_info, dataset_id):
         return {
             'namespace': 'mga',
-            'id': f'mga_sample_table.{dataset_id}',
+            'id': f'mga_sample_table_{dataset_id}',
             'table_title': dataset_id,
             'col1_header': "Pool / Sample" if run_info.from_sequencing else "Sample ID / Name",
             'no_beeswarm': True,
