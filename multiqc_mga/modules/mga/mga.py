@@ -44,6 +44,9 @@ adapter_threshold_multiplier = 0.005
 # Based on https://github.com/MultiQC/example-plugin
 
 class MultiqcModule(BaseMultiqcModule):
+    '''
+    A MultiQC module for MGA.
+    '''
 
     def __init__(self):
 
@@ -126,9 +129,9 @@ class MultiqcModule(BaseMultiqcModule):
     def _merge_run_summaries(self, run_datasets):
         '''
         Merge the XML trees for a single run id into a more useful form.
-        
+
         :param run_datasets: The list of MGA summaries (XML trees) whose run ids are all the same.
-        
+
         :return A dictionary that contains the summary of the information gathered for the run,
         all the MGA summary information into a dictionary keyed by dataset id,
         and all the reference genomes used.
@@ -182,8 +185,18 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def create_mga_reports(self, mga_data):
+        '''
+        Build the sections for the overall report, repeated for each of the runs
+        found in the MGA data. The load methods above will have grouped the loaded XML
+        trees by run id.
+
+        :param mga_data: The data loaded from the MGA files. It is a dictionary with the
+        run id as the key and a list of XML trees for all content parsed with that run id.
+        '''
         for run_id, run_contents in mga_data.items():
             run_info = self._merge_run_summaries(run_contents)
+
+            # The plot (one per run).
 
             plot_data, plot_categories = self._plot_data(run_info)
 
@@ -195,6 +208,8 @@ class MultiqcModule(BaseMultiqcModule):
                 helptext = self._plot_help(run_info),
                 plot = bargraph.plot(plot_data, plot_categories, self._plot_config(run_info))
             )
+
+            # The two summary tables (two per dataset in the run).
 
             for dataset_id, mga_summary in run_info.mga_summaries.items():
 
@@ -222,6 +237,15 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def _plot_data(self, run_info):
+        '''
+        Assemble the plot information for a run.
+
+        :param run_info: A dictionary of MGA information (as returned by _merge_run_summaries)
+        keyed by dataset id.
+
+        :return A tuple of bargraph plot data and categories. Both values are dictionaries keyed
+        by dataset id.
+        '''
 
         bar_data = OrderedDict()
         categories = OrderedDict()
@@ -315,6 +339,14 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def _plot_config(self, run_info):
+        '''
+        Create the plot configuration for the main MGA plot.
+
+        :param run_info: The information for MGA data with one run id, as created by
+        _merge_run_summaries
+
+        :return A dictionary of plot configuration parameters.
+        '''
         return {
             'id': "mga_plot_{}".format(run_info.run_id.replace(' ', '_')),
             'title': f"Multi Genome Alignment: {run_info.run_id}",
@@ -329,6 +361,16 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def _plot_description(self, run_info):
+        '''
+        Get the description added to the MGA plot. Sadly this doesn't work as we would
+        want in Markdown, so a small HTML table is created instead.
+
+        :param run_info: The information for MGA data with one run id, as created by
+        _merge_run_summaries
+
+        :return An HTML snippet containing the run properties plus number of sequences as
+        a table.
+        '''
         results_desc = "<table>"
         for name, value in run_info.properties.items():
             try:
@@ -342,6 +384,13 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def _plot_key(self):
+        '''
+        Create a key for the MGA plot. This cannot easily be done through the standard
+        mechanisms, so an HTML snippet is created here with little coloured spans that
+        form a key to the plot.
+
+        :return An HTML snippet to insert as custom content to the plot.
+        '''
         key_elem_span = '<span class="multiqc_mga_key_element" style="background-color:{}">&nbsp;&nbsp;&nbsp;&nbsp;</span>&nbsp;{}\n'
 
         key_desc = '<div id="mga_plot_key">\n'
@@ -357,6 +406,14 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def _plot_help(self, run_info):
+        '''
+        Build the help text for the plot.
+
+        :param run_info: The information for MGA data with one run id, as created by
+        _merge_run_summaries
+
+        :return Markdown help text.
+        '''
 
         # See https://stackoverflow.com/questions/36139/how-to-sort-a-list-of-strings
         genomes = natsorted(run_info.reference_genomes.values(), key = cmp_to_key(locale.strcoll))
@@ -423,7 +480,13 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def _main_table_data(self, mga_summary):
+        '''
+        Assemble the data for a summary table for a given dataset.
 
+        :param mga_summary: An XML tree for a dataset.
+
+        :return The table data as required for table.plot.
+        '''
         dataset_id = mga_summary.findtext('DatasetId')
         sequence_count = int(mga_summary.findtext('SequenceCount'))
         sampled_count = int(mga_summary.findtext('SampledCount'))
@@ -499,6 +562,11 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def _main_table_headers(self):
+        '''
+        Create the headers for an MGA summary table.
+
+        :return A dictionary of table header information.
+        '''
         headers = OrderedDict()
         headers['species'] = {
             'title': 'Species/Reference Genome',
@@ -592,6 +660,13 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def _main_table_config(self, dataset_id):
+        '''
+        Create the table configuration for a summary table.
+
+        :param dataset_id: The id of the dataset the table contains.
+
+        :return A dictionary of table configuration parameters.
+        '''
         return {
             'namespace': 'mga',
             'id': f'mga_stats_table_{dataset_id}',
@@ -603,6 +678,13 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def _sample_table_data(self, mga_summary):
+        '''
+        Assemble the data for a sample table for a given dataset.
+
+        :param mga_summary: An XML tree for a dataset.
+
+        :return The table data as required for table.plot.
+        '''
         dataset_id = mga_summary.findtext('DatasetId')
 
         table_data = OrderedDict()
@@ -629,6 +711,11 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def _sample_table_headers(self):
+        '''
+        Create the headers for an MGA sample table.
+
+        :return A dictionary of table header information.
+        '''
         headers = OrderedDict()
         headers['group'] = {
             'title': 'Group',
@@ -669,6 +756,14 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def _sample_table_config(self, run_info, dataset_id):
+        '''
+        Create the table configuration for a summary table.
+
+        :param run_info: The run information that contains the dataset in question.
+        :param dataset_id: The id of the dataset the table contains.
+
+        :return A dictionary of table configuration parameters.
+        '''
         return {
             'namespace': 'mga',
             'id': f'mga_sample_table_{dataset_id}',
@@ -680,12 +775,21 @@ class MultiqcModule(BaseMultiqcModule):
         }
 
 
-    def _get_species_and_controls(self, summary):
-        samples = self._get_sample_information(summary)
+    def _get_species_and_controls(self, mga_summary):
+        '''
+        Determine which references belong to samples (i.e. the expected genome for the sample)
+        and which are controls.
+
+        :param mga_summary: The XML tree for a dataset.
+
+        :return A tuple of two sets: the species that are applicable for samples and the
+        references that are control genomes.
+        '''
+        samples = self._get_sample_information(mga_summary)
 
         species = set()
         controls = set()
-        for sample in samples:
+        for sample in mga_summary:
             if 'Species' in sample:
                 sp = sample['Species']
                 species.add(sp)
@@ -695,7 +799,41 @@ class MultiqcModule(BaseMultiqcModule):
         return species, controls
 
 
+    def _get_sample_information(self, mga_summary):
+        '''
+        Decode the sample information for a dataset's summary.
+
+        :param mga_summary: The XML tree for a dataset.
+
+        :return A list of dictionaries containing the sample information from the
+        summary.
+        '''
+        samples = []
+        for sample in mga_summary.findall("Samples/Sample"):
+            sample_info = { 'Control': 'No' }
+            self._read_properties(sample, sample_info)
+            sample_info['Control'] = sample_info['Control'].lower() in ['yes','true']
+            samples.append(sample_info)
+        return samples
+
+
     def _accept_genome(self, species_set, mga_summary, alignment_summary):
+        '''
+        Determine whether an alignment summary qualifies as a genome that is acceptable for
+        a sample. This is essentially either that the genome is one of the genomes that apply
+        to any sample in the data set, or one where the counts are high enough to be significant.
+
+        :param species_set: The set of reference genome ids that apply to samples (as returned
+        by _get_species_and_controls).
+
+        :param mga_summary: The XML tree for a dataset.
+
+        :param alignment_summary: Another XML tree, but for a specific alignment summary within
+        mga_summary.
+
+        :return if the alignment summary needs to appear in the plot or table, false if it is
+        unnecessary.
+        '''
         reference_genome_name = alignment_summary.find("ReferenceGenome").attrib['name']
 
         if reference_genome_name in species_set:
@@ -713,17 +851,19 @@ class MultiqcModule(BaseMultiqcModule):
         return assigned_fraction >= assigned_fraction_threshold or aligned_fraction >= aligned_fraction_threshold and aligned_error_rate < error_rate_threshold
 
 
-    def _get_sample_information(self, mga_summary):
-        samples = []
-        for sample in mga_summary.findall("Samples/Sample"):
-            sample_info = { 'Control': 'No' }
-            self._read_properties(sample, sample_info)
-            sample_info['Control'] = sample_info['Control'].lower() in ['yes','true']
-            samples.append(sample_info)
-        return samples
-
-
     def _read_properties(self, element, props = OrderedDict()):
+        '''
+        Read properties from a "Properties" section under an XML tree node. The
+        "Properties" element needs to be an immediate child of the given node.
+
+        :param element: The XML tree node to parse from.
+
+        :param props: The dictionary to populate with the properties read. A new
+        dictionary will be used if this isn't given.
+
+        :return A dictionary populated with the key value property pairs. This
+        is a reference to "props" if that argument is given.
+        '''
         for prop in element.findall("Properties/Property"):
             try:
                 props[prop.attrib['name']] = prop.attrib.get('value')
@@ -732,7 +872,16 @@ class MultiqcModule(BaseMultiqcModule):
                 pass
         return props
 
+
     def _strip_from_lines(self, str):
+        '''
+        Remove leading and trailing white space from the given multi-line string,
+        preserving line breaks.
+
+        :param str: The string to string.
+
+        :return The string each line's leading and trailing white space removed.
+        '''
         lines = [ l.strip() for l in str.splitlines() ]
         return "\n".join(lines)
 
