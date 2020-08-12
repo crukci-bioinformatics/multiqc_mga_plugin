@@ -74,7 +74,8 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def load_mga_files(self):
-        """Find and load the content of MGA XML files.
+        """
+        Find and load the content of MGA XML files.
 
         :return A dictionary of run id (MGA, not necessary sequencing) to a list of XML
         trees with content for that run.
@@ -99,7 +100,8 @@ class MultiqcModule(BaseMultiqcModule):
 
 
     def _read_mga_xml_file(self, mga_data, mgafile):
-        """Read a potential MGA XML file.
+        """
+        Read a potential MGA XML file.
 
         This method has to load the content to make sure the file is from MGA. Ideally,
         MultiQC should be configured to have a more constrained name than "*.xml".
@@ -356,7 +358,8 @@ class MultiqcModule(BaseMultiqcModule):
             'ymin': 0,
             'ymax': run_info.max_sequence_count,
             'use_legend': False,
-            'tt_percentages': False
+            'tt_percentages': False,
+            'hide_zero_cats': False
         }
 
 
@@ -782,14 +785,14 @@ class MultiqcModule(BaseMultiqcModule):
 
         :param mga_summary: The XML tree for a dataset.
 
-        :return A tuple of two sets: the species that are applicable for samples and the
+        :return A tuple of two sets: the species that are used by named samples and the
         references that are control genomes.
         '''
         samples = self._get_sample_information(mga_summary)
 
         species = set()
         controls = set()
-        for sample in mga_summary:
+        for sample in samples:
             if 'Species' in sample:
                 sp = sample['Species']
                 species.add(sp)
