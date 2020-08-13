@@ -49,8 +49,10 @@ class MultiqcModule(BaseMultiqcModule):
     '''
 
     def __init__(self):
+        '''
+        Constructor. Causes the processing to run too.
+        '''
 
-        # Initialise the parent object
         super(MultiqcModule, self).__init__(
             name = 'Multi Genome Alignment',
             target = "MGA",
@@ -881,9 +883,9 @@ class MultiqcModule(BaseMultiqcModule):
         Remove leading and trailing white space from the given multi-line string,
         preserving line breaks.
 
-        :param str: The string to string.
+        :param str: The string to strip.
 
-        :return The string each line's leading and trailing white space removed.
+        :return The string with each line's leading and trailing white space removed.
         '''
         lines = [ l.strip() for l in str.splitlines() ]
         return "\n".join(lines)
