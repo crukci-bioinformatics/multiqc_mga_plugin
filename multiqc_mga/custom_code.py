@@ -36,4 +36,4 @@ def mga_plugin_execution_start():
 
     # Add to the search patterns used by modules
     if 'mga' not in config.sp:
-        config.update_dict( config.sp, { 'mga': { 'fn': '*.xml' } } )
+        config.update_dict( config.sp, { 'mga': { 'fn': '*.mga.xml' } } )
