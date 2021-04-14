@@ -651,10 +651,9 @@ class MultiqcModule(BaseMultiqcModule):
         headers['assigned_perc'] = {
             'title': 'Assigned %',
             'description': 'Percentage of reads assigned',
-            'suffix': '%',
             'min': 0,
             'max': 100,
-            'format': '{:,.1f}',
+            'format': '{:,.1%}',
             'scale': False,
             #'shared_key': 'percent_aligned'
         }
